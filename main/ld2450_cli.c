@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <inttypes.h>
 
 #include "sdkconfig.h"
 
@@ -18,6 +19,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
+#include "crash_diag.h"
 #include "ld2450.h"
 #include "ld2450_cmd.h"
 #include "nvs_config.h"
@@ -54,6 +56,7 @@ static void print_help(void)
         "  ld delay zone <1-5> <ms>     (set zone delay)\n"
         "  ld delay all <milliseconds>  (set all endpoints)\n"
         "  ld config\n"
+        "  ld diag                      (show crash diagnostics)\n"
         "  ld nvs                       (test NVS health)\n"
         "  ld reboot\n"
         "  ld factory-reset             (FULL reset: erase Zigbee + config)\n\n"
@@ -127,6 +130,21 @@ static void print_config(void)
            cfg.occupancy_delay_ms[4], cfg.occupancy_delay_ms[5]);
 }
 
+static void print_diag(void)
+{
+    crash_diag_data_t diag;
+    if (crash_diag_get_data(&diag) != ESP_OK) {
+        printf("diag: error\n");
+        return;
+    }
+    printf("Crash Diagnostics:\n");
+    printf("  boot_count:      %" PRIu32 "\n", diag.boot_count);
+    printf("  reset_reason:    %u (%s)\n", diag.reset_reason,
+           crash_diag_reset_reason_str(diag.reset_reason));
+    printf("  last_uptime:     %" PRIu32 " sec\n", diag.last_uptime_sec);
+    printf("  min_free_heap:   %" PRIu32 " bytes\n", diag.min_free_heap);
+}
+
 static void cli_task(void *arg)
 {
     (void)arg;
@@ -167,6 +185,7 @@ static void cli_task(void *arg)
             if (strcmp(cmd, "help") == 0) { print_help(); continue; }
             if (strcmp(cmd, "state") == 0) { print_state(); continue; }
             if (strcmp(cmd, "config") == 0) { print_config(); continue; }
+            if (strcmp(cmd, "diag") == 0) { print_diag(); continue; }
 
             if (strcmp(cmd, "en") == 0) {
                 char *v = strtok(NULL, " \t\r\n");

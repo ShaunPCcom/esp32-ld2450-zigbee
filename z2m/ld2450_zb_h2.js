@@ -8,6 +8,7 @@
 // ---- ZCL data type constants (inline to avoid require('zigbee-herdsman')) ----
 const ZCL_UINT8    = 0x20;
 const ZCL_UINT16   = 0x21;
+const ZCL_UINT32   = 0x23;
 const ZCL_INT16    = 0x29;
 const ZCL_CHAR_STR = 0x42;
 
@@ -37,6 +38,10 @@ const ld2450ConfigCluster = {
         coordPublishing:    {ID: 0x0021, type: ZCL_UINT8, write: true},
         occupancyCooldown:  {ID: 0x0022, type: ZCL_UINT16, write: true},
         occupancyDelay:     {ID: 0x0023, type: ZCL_UINT16, write: true},
+        bootCount:          {ID: 0x0030, type: ZCL_UINT32, report: false},
+        resetReason:        {ID: 0x0031, type: ZCL_UINT8, report: false},
+        lastUptimeSec:      {ID: 0x0032, type: ZCL_UINT32, report: false},
+        minFreeHeap:        {ID: 0x0033, type: ZCL_UINT32, report: false},
         restart:            {ID: 0x00F0, type: ZCL_UINT8, write: true},
     },
     commands: {},
@@ -117,6 +122,20 @@ const fzLocal = {
             }
             if (d.occupancyDelay !== undefined) {
                 result.occupancy_delay = d.occupancyDelay;
+            }
+
+            /* Crash diagnostics (read-only) */
+            if (d.bootCount !== undefined) {
+                result.boot_count = d.bootCount;
+            }
+            if (d.resetReason !== undefined) {
+                result.reset_reason = d.resetReason;
+            }
+            if (d.lastUptimeSec !== undefined) {
+                result.last_uptime_sec = d.lastUptimeSec;
+            }
+            if (d.minFreeHeap !== undefined) {
+                result.min_free_heap = d.minFreeHeap;
             }
 
             if (d.targetCoords !== undefined) {
@@ -324,6 +343,19 @@ const exposesDefinition = [
             `Delay before reporting Occupied (zone ${i + 1})`, {unit: 'ms', value_min: 0, value_max: 65535, value_step: 1})
     ),
 
+    /* Crash diagnostics (read-only sensors for remote debugging) */
+    numericExpose('boot_count', 'Boot count', ACCESS_STATE,
+        'Total number of device reboots (monotonic counter)', {}),
+
+    numericExpose('reset_reason', 'Reset reason', ACCESS_STATE,
+        'Last reset cause code (0=unknown, 1=poweron, 8=brownout, 3=software, 4=panic, 5=int_wdt, 6=task_wdt)', {value_min: 0, value_max: 15}),
+
+    numericExpose('last_uptime_sec', 'Last uptime', ACCESS_STATE,
+        'Uptime in seconds before last reset (0=unknown)', {unit: 's'}),
+
+    numericExpose('min_free_heap', 'Min free heap', ACCESS_STATE,
+        'Minimum free heap memory since boot', {unit: 'bytes'}),
+
     enumExpose('restart', 'Restart', ACCESS_SET, ['restart'],
         'Restart the device'),
 
@@ -379,6 +411,7 @@ const definition = {
         await ep1.read('ld2450Config', [
             'targetCount', 'targetCoords', 'maxDistance', 'angleLeft', 'angleRight',
             'trackingMode', 'coordPublishing', 'occupancyCooldown', 'occupancyDelay',
+            'bootCount', 'resetReason', 'lastUptimeSec', 'minFreeHeap',
         ]);
 
         for (let z = 0; z < 5; z++) {

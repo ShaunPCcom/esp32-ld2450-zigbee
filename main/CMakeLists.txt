@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.cpp"
+        "crash_diag.c"
         "ld2450_cli.c"
         "nvs_config.c"
         "zigbee_init.c"

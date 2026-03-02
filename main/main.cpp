@@ -7,6 +7,7 @@
 #include "nvs_flash.h"
 
 extern "C" {
+#include "crash_diag.h"
 #include "ld2450.h"
 #include "ld2450_cmd.h"
 #include "ld2450_cli.h"
@@ -72,6 +73,9 @@ extern "C" void app_main(void)
 
     /* Load persistent config (or defaults) */
     ESP_ERROR_CHECK(nvs_config_init());
+
+    /* Initialize crash diagnostics (must be early for accurate reset reason) */
+    ESP_ERROR_CHECK(crash_diag_init());
 
     nvs_config_t saved_cfg;
     ESP_ERROR_CHECK(nvs_config_get(&saved_cfg));

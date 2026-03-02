@@ -14,6 +14,7 @@
 /* Project */
 #include "board_config.h"
 #include "board_led.h"
+#include "crash_diag.h"
 #include "nvs_config.h"
 #include "version.h"
 #include "zigbee_attr_handler.h"
@@ -119,6 +120,30 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
         ESP_ZB_ZCL_ATTR_TYPE_U16,
         ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
         &init_delay);
+
+    /* Crash diagnostics (read-only attributes for remote debugging) */
+    crash_diag_data_t diag;
+    crash_diag_get_data(&diag);
+
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_BOOT_COUNT,
+        ESP_ZB_ZCL_ATTR_TYPE_U32,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &diag.boot_count);
+
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_RESET_REASON,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &diag.reset_reason);
+
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_LAST_UPTIME_SEC,
+        ESP_ZB_ZCL_ATTR_TYPE_U32,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &diag.last_uptime_sec);
+
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_MIN_FREE_HEAP,
+        ESP_ZB_ZCL_ATTR_TYPE_U32,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &diag.min_free_heap);
 
     esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_RESTART,
         ESP_ZB_ZCL_ATTR_TYPE_U8,

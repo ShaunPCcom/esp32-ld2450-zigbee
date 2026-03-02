@@ -28,6 +28,13 @@
 #define ZB_ATTR_COORD_PUBLISHING       0x0021  /* U8, read-write (0=off, 1=on) */
 #define ZB_ATTR_OCCUPANCY_COOLDOWN     0x0022  /* U16, read-write (0-300 seconds) */
 #define ZB_ATTR_OCCUPANCY_DELAY        0x0023  /* U16, read-write (0-65535 milliseconds) */
+
+/* Crash diagnostics (read-only, for remote debugging) */
+#define ZB_ATTR_BOOT_COUNT             0x0030  /* U32, read-only (monotonic boot counter) */
+#define ZB_ATTR_RESET_REASON           0x0031  /* U8, read-only (last reset cause) */
+#define ZB_ATTR_LAST_UPTIME_SEC        0x0032  /* U32, read-only (uptime before last reset) */
+#define ZB_ATTR_MIN_FREE_HEAP          0x0033  /* U32, read-only (min free heap since boot) */
+
 #define ZB_ATTR_RESTART                0x00F0  /* U8, write-only (write any value) */
 
 /* ---- Attributes on ZB_CLUSTER_LD2450_ZONE (EP 2-6) ---- */
