@@ -15,9 +15,9 @@ static const char *TAG = "crash_diag";
 #define CRASH_DIAG_NVS_BOOT_COUNT "boot_count"
 
 /**
- * RTC memory structure - survives most resets (brownout, WDT, panic)
- * but NOT deep sleep or power loss. Marked RTC_DATA_ATTR for placement
- * in RTC slow memory.
+ * RTC memory structure - survives all resets (software, panic, WDT, brownout)
+ * but NOT power loss. Marked RTC_NOINIT_ATTR so startup code does not zero it
+ * on reset. Magic number detects invalid/uninitialized state on first power-on.
  */
 typedef struct {
     uint32_t magic;             /**< Magic number to detect valid data (0xD1A65BAD) */
@@ -28,7 +28,7 @@ typedef struct {
 
 #define RTC_DIAG_MAGIC 0xD1A65BAD
 
-static RTC_DATA_ATTR rtc_diag_data_t rtc_data;
+static RTC_NOINIT_ATTR rtc_diag_data_t rtc_data;
 static crash_diag_data_t current_diag;
 
 /**

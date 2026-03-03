@@ -351,7 +351,7 @@ const exposesDefinition = [
         'Last reset cause code (0=unknown, 1=poweron, 8=brownout, 3=software, 4=panic, 5=int_wdt, 6=task_wdt)', {value_min: 0, value_max: 15}),
 
     numericExpose('last_uptime_sec', 'Last uptime', ACCESS_STATE,
-        'Uptime in seconds before last reset (0=unknown)', {unit: 's'}),
+        'Uptime in seconds before last reset. Non-zero only after a clean software reboot (e.g. via Restart button). Hardware resets and power loss always show 0.', {unit: 's'}),
 
     numericExpose('min_free_heap', 'Min free heap', ACCESS_STATE,
         'Minimum free heap memory since boot', {unit: 'bytes'}),

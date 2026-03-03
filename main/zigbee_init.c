@@ -127,22 +127,22 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
 
     esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_BOOT_COUNT,
         ESP_ZB_ZCL_ATTR_TYPE_U32,
-        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
         &diag.boot_count);
 
     esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_RESET_REASON,
         ESP_ZB_ZCL_ATTR_TYPE_U8,
-        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
         &diag.reset_reason);
 
     esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_LAST_UPTIME_SEC,
         ESP_ZB_ZCL_ATTR_TYPE_U32,
-        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
         &diag.last_uptime_sec);
 
     esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_MIN_FREE_HEAP,
         ESP_ZB_ZCL_ATTR_TYPE_U32,
-        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
         &diag.min_free_heap);
 
     esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_RESTART,

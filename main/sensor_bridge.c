@@ -6,6 +6,7 @@
 
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -17,6 +18,7 @@
 #include "sensor_bridge.h"
 #include "zigbee_defs.h"
 #include "zigbee_signal_handlers.h"
+#include "crash_diag.h"
 
 static const char *TAG = "sensor_bridge";
 
@@ -44,6 +46,7 @@ static uint32_t s_clear_start_time[6] = {0};  /* when Clear was first detected *
 /* ---- Occupancy delay tracking (per endpoint: 0=main, 1-5=zones) ---- */
 static bool s_pending_occupied[6] = {false};      /* tracking pending Occupied reports */
 static int64_t s_occupied_start_time[6] = {0};   /* when Occupied was first detected (microseconds) */
+static uint32_t s_last_min_free_heap = 0;
 
 /* ================================================================== */
 /*  Sensor bridge: poll LD2450 and update Zigbee attributes            */
@@ -82,6 +85,9 @@ static void sensor_poll_cb(uint8_t param)
 
     if (!zigbee_is_network_joined()) return;
 
+    /* Update RTC uptime every poll — pure memory write, no Zigbee traffic */
+    crash_diag_update_uptime((uint32_t)(esp_timer_get_time() / 1000000ULL));
+
     ld2450_state_t state;
     if (ld2450_get_state(&state) != ESP_OK) return;
 
@@ -93,6 +99,7 @@ static void sensor_poll_cb(uint8_t param)
     nvs_config_get(&cfg);
     uint32_t current_ticks = xTaskGetTickCount();
     int64_t current_time_us = esp_timer_get_time();
+    bool any_sensor_change = false;
 
     /* EP 1: Overall occupancy */
     bool occupied = state.occupied_global;
@@ -130,6 +137,7 @@ static void sensor_poll_cb(uint8_t param)
             s_last_occupied = true;
             s_last_report_time[0] = current_ticks;
             s_pending_occupied[0] = false;
+            any_sensor_change = true;
         }
     }
 
@@ -146,6 +154,7 @@ static void sensor_poll_cb(uint8_t param)
             s_last_occupied = false;
             s_last_report_time[0] = current_ticks;
             s_pending_clear[0] = false;
+            any_sensor_change = true;
         }
     }
 
@@ -186,6 +195,7 @@ static void sensor_poll_cb(uint8_t param)
                 s_last_zone_occ[i] = true;
                 s_last_report_time[i + 1] = current_ticks;
                 s_pending_occupied[i + 1] = false;
+                any_sensor_change = true;
             }
         }
 
@@ -202,6 +212,7 @@ static void sensor_poll_cb(uint8_t param)
                 s_last_zone_occ[i] = false;
                 s_last_report_time[i + 1] = current_ticks;
                 s_pending_clear[i + 1] = false;
+                any_sensor_change = true;
             }
         }
     }
@@ -215,6 +226,7 @@ static void sensor_poll_cb(uint8_t param)
             ZB_ATTR_TARGET_COUNT,
             &count, false);
         s_last_target_count = count;
+        any_sensor_change = true;
     }
 
     /* EP 1: Target coordinates (only if publishing enabled) */
@@ -228,8 +240,40 @@ static void sensor_poll_cb(uint8_t param)
                 ZB_ATTR_TARGET_COORDS,
                 coords, false);
             memcpy(s_last_coords, coords, sizeof(s_last_coords));
+            any_sensor_change = true;
         }
     }
+
+    /* Update min_free_heap only when another sensor value changed this poll cycle */
+    if (any_sensor_change) {
+        uint32_t heap = esp_get_minimum_free_heap_size();
+        if (heap != s_last_min_free_heap) {
+            esp_zb_zcl_set_attribute_val(ZB_EP_MAIN,
+                ZB_CLUSTER_LD2450_CONFIG,
+                ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+                ZB_ATTR_MIN_FREE_HEAP,
+                &heap, false);
+            s_last_min_free_heap = heap;
+        }
+    }
+}
+
+static void configure_reporting_for_diag_attr(uint16_t attr_id, uint16_t max_interval)
+{
+    esp_zb_zcl_reporting_info_t rpt = {0};
+    rpt.direction    = ESP_ZB_ZCL_REPORT_DIRECTION_SEND;
+    rpt.ep           = ZB_EP_MAIN;
+    rpt.cluster_id   = ZB_CLUSTER_LD2450_CONFIG;
+    rpt.cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE;
+    rpt.attr_id      = attr_id;
+    rpt.u.send_info.min_interval     = REPORT_MIN_INTERVAL;
+    rpt.u.send_info.max_interval     = max_interval;
+    rpt.u.send_info.def_min_interval = REPORT_MIN_INTERVAL;
+    rpt.u.send_info.def_max_interval = max_interval;
+    rpt.u.send_info.delta.u32        = 0;
+    rpt.dst.profile_id = ESP_ZB_AF_HA_PROFILE_ID;
+    rpt.manuf_code     = ESP_ZB_ZCL_ATTR_NON_MANUFACTURER_SPECIFIC;
+    esp_zb_zcl_update_reporting_info(&rpt);
 }
 
 static void configure_reporting_for_occ(uint8_t ep)
@@ -257,6 +301,12 @@ static void configure_all_reporting(void)
     for (int i = 0; i < ZB_EP_ZONE_COUNT; i++) {
         configure_reporting_for_occ(ZB_EP_ZONE(i));
     }
+    /* Boot stats: 5-min keepalive guarantees Z2M gets fresh values after any rejoin */
+    configure_reporting_for_diag_attr(ZB_ATTR_BOOT_COUNT,      REPORT_MAX_INTERVAL);
+    configure_reporting_for_diag_attr(ZB_ATTR_RESET_REASON,    REPORT_MAX_INTERVAL);
+    configure_reporting_for_diag_attr(ZB_ATTR_LAST_UPTIME_SEC, REPORT_MAX_INTERVAL);
+    /* Min free heap: no keepalive, reported only alongside occupancy/sensor changes */
+    configure_reporting_for_diag_attr(ZB_ATTR_MIN_FREE_HEAP,   0);
     ESP_LOGI(TAG, "Reporting configured for all endpoints");
 }
 
