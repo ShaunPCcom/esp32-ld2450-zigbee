@@ -91,20 +91,17 @@ static void print_state(void)
 
 static void print_zones(void)
 {
-    ld2450_zone_t z[5];
-    if (ld2450_get_zones(z, 5) != ESP_OK) {
+    ld2450_zone_t z[10];
+    if (ld2450_get_zones(z, 10) != ESP_OK) {
         printf("zones: error\n");
         return;
     }
 
-    for (int i = 0; i < 5; i++) {
-        printf("zone%d: %s  v=[(%d,%d) (%d,%d) (%d,%d) (%d,%d)] mm\n",
+    for (int i = 0; i < 10; i++) {
+        printf("zone%d: %s  vertices=%u\n",
                i + 1,
                z[i].vertex_count >= 3 ? "on " : "off",
-               (int)z[i].v[0].x_mm, (int)z[i].v[0].y_mm,
-               (int)z[i].v[1].x_mm, (int)z[i].v[1].y_mm,
-               (int)z[i].v[2].x_mm, (int)z[i].v[2].y_mm,
-               (int)z[i].v[3].x_mm, (int)z[i].v[3].y_mm);
+               z[i].vertex_count);
     }
 }
 
@@ -120,14 +117,20 @@ static void print_config(void)
            cfg.bt_disabled,
            cfg.tracking_mode ? "single" : "multi",
            cfg.publish_coords ? "on" : "off");
-    printf("cooldown: main=%u zone1=%u zone2=%u zone3=%u zone4=%u zone5=%u sec\n",
-           cfg.occupancy_cooldown_sec[0], cfg.occupancy_cooldown_sec[1],
-           cfg.occupancy_cooldown_sec[2], cfg.occupancy_cooldown_sec[3],
-           cfg.occupancy_cooldown_sec[4], cfg.occupancy_cooldown_sec[5]);
-    printf("delay: main=%u zone1=%u zone2=%u zone3=%u zone4=%u zone5=%u ms\n",
-           cfg.occupancy_delay_ms[0], cfg.occupancy_delay_ms[1],
-           cfg.occupancy_delay_ms[2], cfg.occupancy_delay_ms[3],
-           cfg.occupancy_delay_ms[4], cfg.occupancy_delay_ms[5]);
+    printf("cooldown: main=%u z1=%u z2=%u z3=%u z4=%u z5=%u z6=%u z7=%u z8=%u z9=%u z10=%u sec\n",
+           cfg.occupancy_cooldown_sec[0],  cfg.occupancy_cooldown_sec[1],
+           cfg.occupancy_cooldown_sec[2],  cfg.occupancy_cooldown_sec[3],
+           cfg.occupancy_cooldown_sec[4],  cfg.occupancy_cooldown_sec[5],
+           cfg.occupancy_cooldown_sec[6],  cfg.occupancy_cooldown_sec[7],
+           cfg.occupancy_cooldown_sec[8],  cfg.occupancy_cooldown_sec[9],
+           cfg.occupancy_cooldown_sec[10]);
+    printf("delay: main=%u z1=%u z2=%u z3=%u z4=%u z5=%u z6=%u z7=%u z8=%u z9=%u z10=%u ms\n",
+           cfg.occupancy_delay_ms[0],  cfg.occupancy_delay_ms[1],
+           cfg.occupancy_delay_ms[2],  cfg.occupancy_delay_ms[3],
+           cfg.occupancy_delay_ms[4],  cfg.occupancy_delay_ms[5],
+           cfg.occupancy_delay_ms[6],  cfg.occupancy_delay_ms[7],
+           cfg.occupancy_delay_ms[8],  cfg.occupancy_delay_ms[9],
+           cfg.occupancy_delay_ms[10]);
 }
 
 static void print_diag(void)
@@ -248,8 +251,8 @@ static void cli_task(void *arg)
                         continue;
                     }
                     int zone = atoi(zone_str);
-                    if (zone < 1 || zone > 5) {
-                        printf("zone must be 1-5\n");
+                    if (zone < 1 || zone > 10) {
+                        printf("zone must be 1-10\n");
                         continue;
                     }
                     uint16_t sec = (uint16_t)atoi(val_str);
@@ -330,8 +333,8 @@ static void cli_task(void *arg)
                         continue;
                     }
                     int zone = atoi(zone_str);
-                    if (zone < 1 || zone > 5) {
-                        printf("zone must be 1-5\n");
+                    if (zone < 1 || zone > 10) {
+                        printf("zone must be 1-10\n");
                         continue;
                     }
                     uint16_t ms = (uint16_t)atoi(val_str);
@@ -427,10 +430,10 @@ static void cli_task(void *arg)
                 if (!zid || !onoff) { printf("usage: ld zone <1-5> <on|off> [coords...]\n"); continue; }
 
                 int zi = atoi(zid) - 1;
-                if (zi < 0 || zi >= 5) { printf("zone id must be 1-5\n"); continue; }
+                if (zi < 0 || zi >= 10) { printf("zone id must be 1-10\n"); continue; }
 
-                ld2450_zone_t all[5];
-                if (ld2450_get_zones(all, 5) != ESP_OK) { printf("zones: error\n"); continue; }
+                ld2450_zone_t all[10];
+                if (ld2450_get_zones(all, 10) != ESP_OK) { printf("zones: error\n"); continue; }
                 ld2450_zone_t z = all[zi];
 
                 if (strcmp(onoff, "off") == 0) {

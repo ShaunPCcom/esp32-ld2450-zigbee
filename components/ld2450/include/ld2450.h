@@ -49,10 +49,10 @@ typedef struct {
     ld2450_target_t targets[3];
 
     // Per-zone occupancy (true = occupied)
-    bool zone_occupied[5];
+    bool zone_occupied[10];
 
-    // 5-bit bitmap: bit0=zone1 ... bit4=zone5
-    uint8_t zone_bitmap;
+    // 10-bit bitmap: bit0=zone1 ... bit9=zone10
+    uint16_t zone_bitmap;
 } ld2450_state_t;
 
 // Thread-safe: snapshot current config/state

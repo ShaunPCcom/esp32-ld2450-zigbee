@@ -15,15 +15,14 @@
 #include "ld2450_parser.h"
 #include "ld2450_zone.h"
 
-#define LD2450_ZONE_COUNT 5
+#define LD2450_ZONE_COUNT 10
 #define ZONE_ID_USER(z) ((z) + 1)
 
 static ld2450_zone_t s_zones[LD2450_ZONE_COUNT] = {
-    /* vertex_count < 3 = disabled */
-    { .vertex_count = 0 },
-    { .vertex_count = 0 },
-    { .vertex_count = 0 },
-    { .vertex_count = 0 },
+    /* vertex_count < 3 = disabled (all 10 zones start disabled) */
+    { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+    { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+    { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
     { .vertex_count = 0 },
 };
 
@@ -197,7 +196,7 @@ static void ld2450_uart_task(void *arg)
 
                 // ---- Zone change logging + bitmap ----
                 static bool last_zone_occ[LD2450_ZONE_COUNT] = {0};
-                uint8_t zone_bitmap = 0;
+                uint16_t zone_bitmap = 0;
 
                 for (unsigned zi = 0; zi < LD2450_ZONE_COUNT; zi++) {
                     if (zone_occ[zi]) zone_bitmap |= (1u << zi);

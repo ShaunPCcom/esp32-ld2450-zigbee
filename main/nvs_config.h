@@ -23,11 +23,11 @@ typedef struct {
     uint8_t bt_disabled;        /* 0=BT on, 1=BT off */
 
     /* Zones */
-    ld2450_zone_t zones[5];
+    ld2450_zone_t zones[10];
 
     /* Occupancy reporting */
-    uint16_t occupancy_cooldown_sec[6];  /* 0-300 seconds per endpoint: [0]=main, [1-5]=zones */
-    uint16_t occupancy_delay_ms[6];      /* 0-65535 milliseconds per endpoint: [0]=main, [1-5]=zones */
+    uint16_t occupancy_cooldown_sec[11]; /* 0-300 seconds per endpoint: [0]=main, [1-10]=zones */
+    uint16_t occupancy_delay_ms[11];     /* 0-65535 milliseconds per endpoint: [0]=main, [1-10]=zones */
 } nvs_config_t;
 
 /** Initialize NVS config module and load saved config (or defaults). */

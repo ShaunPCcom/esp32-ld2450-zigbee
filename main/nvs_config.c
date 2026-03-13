@@ -21,14 +21,13 @@ static const nvs_config_t DEFAULT_CONFIG = {
     .angle_right_deg  = 60,
     .bt_disabled      = 1,     /* BT off by default */
     .zones = {
-        { .vertex_count = 0 },
-        { .vertex_count = 0 },
-        { .vertex_count = 0 },
-        { .vertex_count = 0 },
+        { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+        { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+        { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
         { .vertex_count = 0 },
     },
-    .occupancy_cooldown_sec = {0, 0, 0, 0, 0, 0},  /* No cooldown by default for all endpoints */
-    .occupancy_delay_ms = {250, 250, 250, 250, 250, 250},  /* 250ms delay by default for all endpoints */
+    .occupancy_cooldown_sec = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},   /* 11 entries: main + 10 zones */
+    .occupancy_delay_ms     = {250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250},
 };
 
 static esp_err_t nvs_save_u8(const char *key, uint8_t val)
