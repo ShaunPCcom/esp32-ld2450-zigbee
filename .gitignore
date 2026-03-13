@@ -29,3 +29,6 @@ tools/host_test/test_ld2450_parser_stream
 .DS_Store
 Thumbs.db
 .cache/
+
+# Git worktrees
+.worktrees/
