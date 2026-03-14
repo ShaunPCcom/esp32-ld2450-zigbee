@@ -133,11 +133,7 @@ extern "C" void app_main(void)
     }
 }
 
-/* C wrappers for C++ BoardLed API (called from zigbee_app.c) */
-extern "C" void board_led_set_state_off(void) {
-    if (g_board_led) g_board_led->set_state(BoardLed::State::OFF);
-}
-
+/* C wrappers for C++ BoardLed API (called from C modules) */
 extern "C" void board_led_set_state_not_joined(void) {
     if (g_board_led) g_board_led->set_state(BoardLed::State::NOT_JOINED);
 }

@@ -349,21 +349,6 @@ esp_err_t ld2450_get_zones(ld2450_zone_t *out, size_t count)
     return ESP_OK;
 }
 
-esp_err_t ld2450_set_zones(const ld2450_zone_t *zones, size_t count)
-{
-    if (!zones) return ESP_ERR_INVALID_ARG;
-    if (count != LD2450_ZONE_COUNT) return ESP_ERR_INVALID_SIZE;
-
-    for (size_t i = 0; i < LD2450_ZONE_COUNT; i++) {
-        if (!zone_vertices_sane(&zones[i])) return ESP_ERR_INVALID_ARG;
-    }
-
-    portENTER_CRITICAL(&s_lock);
-    memcpy(s_zones, zones, sizeof(s_zones));
-    portEXIT_CRITICAL(&s_lock);
-    return ESP_OK;
-}
-
 uart_port_t ld2450_get_uart_port(void)
 {
     return s_uart_num;
