@@ -518,7 +518,8 @@ static void cli_task(void *arg)
                         printf("zone%d set BUT NVS SAVE FAILED: %s\n", zi + 1, esp_err_to_name(err));
                     }
                 } else {
-                    printf("zone%d update failed\n", zi + 1);
+                    printf("zone%d update failed (all coords must be within +/-%dm)\n",
+                           zi + 1, ZONE_COORD_LIMIT_MM / 1000);
                 }
 
                 continue;

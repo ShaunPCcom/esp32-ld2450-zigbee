@@ -48,10 +48,16 @@ static bool zone_vertices_sane(const ld2450_zone_t *z)
 {
     // Disabled zones are always sane.
     if (z->vertex_count < 3) return true;
+
+    bool any_nonzero = false;
     for (int i = 0; i < z->vertex_count; i++) {
-        if (z->v[i].x_mm != 0 || z->v[i].y_mm != 0) return true;
+        // Reject coordinates beyond the sensor's physical reach.
+        // x is left/right (signed); y is depth (always positive — sensor only sees forward).
+        if (z->v[i].x_mm < -ZONE_COORD_LIMIT_MM || z->v[i].x_mm > ZONE_COORD_LIMIT_MM) return false;
+        if (z->v[i].y_mm < 0                     || z->v[i].y_mm > ZONE_COORD_LIMIT_MM) return false;
+        if (z->v[i].x_mm != 0 || z->v[i].y_mm != 0) any_nonzero = true;
     }
-    return false;
+    return any_nonzero;
 }
 
 static ld2450_target_t select_single_target(const ld2450_report_t *r)
