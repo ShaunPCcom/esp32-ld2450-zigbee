@@ -157,7 +157,7 @@ const fzLocal = {
                 const cl = d[`zone${z}Cooldown`];
                 const dl = d[`zone${z}Delay`];
 
-                if (vc !== undefined) result[`zone_${z}_vertex_count`] = vc;
+                if (vc !== undefined) result[`zone_${z}_vertex_count`] = String(vc);
                 if (cs !== undefined) result[`zone_${z}_coords`]       = mmCsvToMetres(cs || '');
                 if (cl !== undefined) result[`zone_${z}_cooldown`]     = cl;
                 if (dl !== undefined) result[`zone_${z}_delay`]        = dl;
@@ -186,13 +186,37 @@ const tzLocal = {
             registerCustomClusters(meta.device);
             const ep1 = meta.device.getEndpoint(1);
 
-            /* Zone vertex_count */
+            /* Zone vertex_count — append/truncate existing coords to match new count */
             const zoneVcMatch = key.match(/^zone_(\d+)_vertex_count$/);
             if (zoneVcMatch) {
-                const n = parseInt(zoneVcMatch[1]) - 1;
-                const vc = Math.max(0, Math.min(10, parseInt(value) || 0));
-                await ep1.write('ld2450Config', {[`zone${n + 1}VertexCount`]: vc});
-                return {state: {[key]: vc}};
+                const z = parseInt(zoneVcMatch[1]);
+                const validVc = Math.max(0, parseInt(value) || 0);
+                const coordsKey = `zone_${z}_coords`;
+                const stateUpdate = {[key]: String(validVc)};
+
+                await ep1.write('ld2450Config', {[`zone${z}VertexCount`]: validVc});
+
+                if (validVc > 0) {
+                    /* Parse current pairs from state (metres CSV) */
+                    const curCoords = (meta.state || {})[coordsKey] || '';
+                    const tokens = curCoords ? curCoords.split(',').map(s => s.trim()).filter(Boolean) : [];
+                    const pairs = [];
+                    for (let i = 0; i + 1 < tokens.length; i += 2) pairs.push([tokens[i], tokens[i + 1]]);
+
+                    /* Append zero pairs if growing; truncate if shrinking */
+                    while (pairs.length < validVc) pairs.push(['0', '0']);
+                    pairs.length = validVc;
+
+                    const metresCoords = pairs.map(p => p.join(',')).join(',');
+                    try {
+                        await ep1.write('ld2450Config', {[`zone${z}Coords`]: metresCsvToMm(metresCoords)});
+                        stateUpdate[coordsKey] = metresCoords;
+                    } catch (e) {
+                        meta.logger.warn(`[ZB_LD2450] Coords resize failed: ${e.message}`);
+                    }
+                }
+
+                return {state: stateUpdate};
             }
 
             /* Zone coords (metres CSV → mm CSV for firmware) */
@@ -335,11 +359,11 @@ const exposesDefinition = [
 
     /* Zone config (1-10): vertex_count, coords (metres CSV), cooldown, delay */
     ...Array.from({length: 10}, (_, i) => [
-        numericExpose(`zone_${i + 1}_vertex_count`, `Zone ${i + 1} vertex count`, ACCESS_ALL,
-            `Number of zone ${i + 1} vertices (0 = disabled, 3–10 = active polygon)`,
-            {value_min: 0, value_max: 10, value_step: 1}),
+        enumExpose(`zone_${i + 1}_vertex_count`, `Zone ${i + 1} vertex count`, ACCESS_ALL,
+            ['0', '3', '4', '5', '6', '7', '8', '9', '10'],
+            `Number of zone ${i + 1} vertices (0 = disabled, 3–10 = active polygon)`),
         textExpose(`zone_${i + 1}_coords`, `Zone ${i + 1} coords`, ACCESS_ALL,
-            `Zone ${i + 1} polygon vertices in metres as CSV: x1,y1,x2,y2,... (set vertex_count first)`),
+            `Zone ${i + 1} polygon vertices in metres as CSV: x1,y1,x2,y2,...`),
         numericExpose(`zone_${i + 1}_cooldown`, `Zone ${i + 1} cooldown`, ACCESS_ALL,
             `Minimum time before reporting Clear for zone ${i + 1}`,
             {unit: 's', value_min: 0, value_max: 300, value_step: 1}),

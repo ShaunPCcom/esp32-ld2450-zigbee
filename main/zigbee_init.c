@@ -297,6 +297,10 @@ static void zigbee_task(void *pv)
 
     ESP_ERROR_CHECK(esp_zb_platform_config(&platform_cfg));
 
+    /* Increase binding table: EP1 (2) + 10 zone EPs (10) = 12 minimum; 24 gives headroom */
+    esp_zb_aps_src_binding_table_size_set(24);
+    esp_zb_aps_dst_binding_table_size_set(24);
+
     esp_zb_cfg_t zb_cfg = {0};
     zb_cfg.esp_zb_role = (
     #if CONFIG_LD2450_ZB_ROUTER
