@@ -6,6 +6,53 @@
 #include "nvs.h"
 #include "esp_log.h"
 
+/* ---------------------------------------------------------------------------
+ * Migration guard: lock in both old and new zone struct sizes so a padding
+ * surprise is caught at compile time rather than silently corrupting data.
+ *
+ * Old struct (pre-CSV redesign, firmware ≤ v1.1.2):
+ *   bool enabled        → 1 byte + 1 byte alignment padding
+ *   ld2450_point_t v[4] → 4 × (int16_t x + int16_t y) = 16 bytes
+ *   Total               → 18 bytes on ESP32-H2 (RISC-V, little-endian)
+ *
+ * New struct (post-CSV redesign):
+ *   uint8_t vertex_count → 1 byte + 1 byte alignment padding
+ *   ld2450_point_t v[10] → 10 × 4 = 40 bytes
+ *   Total                → 42 bytes
+ * --------------------------------------------------------------------------- */
+typedef struct {
+    bool           enabled;
+    ld2450_point_t v[4];
+} ld2450_zone_old_t;
+
+_Static_assert(sizeof(ld2450_zone_old_t) == 18,
+    "Old zone struct size mismatch — check padding before migrating");
+_Static_assert(sizeof(ld2450_zone_t) == 42,
+    "New zone struct size mismatch — update migration detection");
+
+/* ---------------------------------------------------------------------------
+ * Migration helpers (file-scoped — migration is internal to this module)
+ * --------------------------------------------------------------------------- */
+static bool old_zone_has_coords(const ld2450_zone_old_t *z)
+{
+    for (int i = 0; i < 4; i++) {
+        if (z->v[i].x_mm != 0 || z->v[i].y_mm != 0) return true;
+    }
+    return false;
+}
+
+static void migrate_zone_from_old(const ld2450_zone_old_t *old, ld2450_zone_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    if (old_zone_has_coords(old)) {
+        out->vertex_count = 4;
+        memcpy(out->v, old->v, 4 * sizeof(ld2450_point_t));
+        /* v[4..9] remain zero-initialised */
+    } else {
+        out->vertex_count = 0;  /* was disabled or never configured */
+    }
+}
+
 static const char *TAG = "nvs_config";
 static const char *NVS_NAMESPACE = "ld2450_cfg";
 
@@ -21,14 +68,13 @@ static const nvs_config_t DEFAULT_CONFIG = {
     .angle_right_deg  = 60,
     .bt_disabled      = 1,     /* BT off by default */
     .zones = {
-        { .enabled = false, .v = {{0,0},{0,0},{0,0},{0,0}} },
-        { .enabled = false, .v = {{0,0},{0,0},{0,0},{0,0}} },
-        { .enabled = false, .v = {{0,0},{0,0},{0,0},{0,0}} },
-        { .enabled = false, .v = {{0,0},{0,0},{0,0},{0,0}} },
-        { .enabled = false, .v = {{0,0},{0,0},{0,0},{0,0}} },
+        { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+        { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+        { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+        { .vertex_count = 0 },
     },
-    .occupancy_cooldown_sec = {0, 0, 0, 0, 0, 0},  /* No cooldown by default for all endpoints */
-    .occupancy_delay_ms = {250, 250, 250, 250, 250, 250},  /* 250ms delay by default for all endpoints */
+    .occupancy_cooldown_sec = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},   /* 11 entries: main + 10 zones */
+    .occupancy_delay_ms     = {250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250},
 };
 
 static esp_err_t nvs_save_u8(const char *key, uint8_t val)
@@ -70,7 +116,8 @@ esp_err_t nvs_config_init(void)
     s_cfg = DEFAULT_CONFIG;
 
     nvs_handle_t h;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &h);
+    /* NVS_READWRITE required: zone migration may write back new format blobs on first boot */
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
         ESP_LOGI(TAG, "No saved config, using defaults");
         s_initialized = true;
@@ -90,32 +137,84 @@ esp_err_t nvs_config_init(void)
     nvs_get_u8(h, "angle_r", &s_cfg.angle_right_deg);
     nvs_get_u8(h, "bt_off", &s_cfg.bt_disabled);
 
-    /* Load zones as blobs */
+    /* Load zones: three-way detection — new format, old format (migrate), or missing (default) */
     char key[12];
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) {
         snprintf(key, sizeof(key), "zone_%d", i);
+        s_cfg.zones[i] = (ld2450_zone_t){0};  /* zero-init: vertex_count=0 = disabled */
+
+        /* Try new format first */
         size_t len = sizeof(ld2450_zone_t);
-        nvs_get_blob(h, key, &s_cfg.zones[i], &len);
+        if (nvs_get_blob(h, key, &s_cfg.zones[i], &len) == ESP_OK
+                && len == sizeof(ld2450_zone_t)) {
+            continue;  /* new format, use as-is */
+        }
+
+        /* Zones 5-9 never existed in old firmware — no migration needed */
+        if (i >= 5) continue;
+
+        /* Try old format (zones 0-4 only) */
+        ld2450_zone_old_t old = {0};
+        size_t old_len = sizeof(old);
+        if (nvs_get_blob(h, key, &old, &old_len) == ESP_OK
+                && old_len == sizeof(ld2450_zone_old_t)) {
+            migrate_zone_from_old(&old, &s_cfg.zones[i]);
+            ESP_LOGI(TAG, "zone_%d: migrated from v1 format (vertex_count=%d)",
+                     i, s_cfg.zones[i].vertex_count);
+            /* Write back in new format — overwrites old blob under the same key */
+            esp_err_t save_err = nvs_set_blob(h, key, &s_cfg.zones[i], sizeof(ld2450_zone_t));
+            if (save_err == ESP_OK) {
+                nvs_commit(h);
+                ESP_LOGI(TAG, "zone_%d: migration saved", i);
+            } else {
+                ESP_LOGW(TAG, "zone_%d: migration write failed (%s), will retry next boot",
+                         i, esp_err_to_name(save_err));
+            }
+            continue;
+        }
+        /* Key missing or unrecognised size — leave disabled (already zero-init above) */
     }
 
-    /* Load occupancy cooldown - try new array format first, fall back to old single value */
-    size_t cooldown_len = sizeof(s_cfg.occupancy_cooldown_sec);
-    esp_err_t cool_err = nvs_get_blob(h, "occ_cool", s_cfg.occupancy_cooldown_sec, &cooldown_len);
-    if (cool_err == ESP_ERR_NVS_NOT_FOUND) {
-        /* Try loading old single-value format for backward compatibility */
-        uint16_t old_cooldown = 0;
-        if (nvs_get_u16(h, "occ_cool", &old_cooldown) == ESP_OK) {
-            /* Populate all endpoints with the old single value */
-            for (int i = 0; i < 6; i++) {
-                s_cfg.occupancy_cooldown_sec[i] = old_cooldown;
+    /* Load occupancy cooldown — handle: [11] blob, old [6] blob, old single u16 */
+    {
+        size_t cooldown_len = sizeof(s_cfg.occupancy_cooldown_sec);
+        if (nvs_get_blob(h, "occ_cool", s_cfg.occupancy_cooldown_sec, &cooldown_len) != ESP_OK
+                || cooldown_len != sizeof(s_cfg.occupancy_cooldown_sec)) {
+            /* Try old [6] blob */
+            uint16_t old_cool[6] = {0};
+            size_t old_len = sizeof(old_cool);
+            if (nvs_get_blob(h, "occ_cool", old_cool, &old_len) == ESP_OK
+                    && old_len == sizeof(old_cool)) {
+                memcpy(s_cfg.occupancy_cooldown_sec, old_cool, sizeof(old_cool));
+                /* indices 6-10 remain at default 0 */
+                ESP_LOGI(TAG, "cooldown: migrated from [6] to [11]");
+            } else {
+                /* Try even older single-value u16 */
+                uint16_t single = 0;
+                if (nvs_get_u16(h, "occ_cool", &single) == ESP_OK) {
+                    for (int i = 0; i < 11; i++) s_cfg.occupancy_cooldown_sec[i] = single;
+                    ESP_LOGI(TAG, "cooldown: migrated single value %u to all endpoints", single);
+                }
             }
-            ESP_LOGI(TAG, "Migrated old cooldown value %u to all endpoints", old_cooldown);
         }
     }
 
-    /* Load occupancy delay */
-    size_t delay_len = sizeof(s_cfg.occupancy_delay_ms);
-    nvs_get_blob(h, "occ_delay", s_cfg.occupancy_delay_ms, &delay_len);
+    /* Load occupancy delay — handle: [11] blob, old [6] blob */
+    {
+        size_t delay_len = sizeof(s_cfg.occupancy_delay_ms);
+        if (nvs_get_blob(h, "occ_delay", s_cfg.occupancy_delay_ms, &delay_len) != ESP_OK
+                || delay_len != sizeof(s_cfg.occupancy_delay_ms)) {
+            /* Try old [6] blob */
+            uint16_t old_delay[6] = {0};
+            size_t old_len = sizeof(old_delay);
+            if (nvs_get_blob(h, "occ_delay", old_delay, &old_len) == ESP_OK
+                    && old_len == sizeof(old_delay)) {
+                memcpy(s_cfg.occupancy_delay_ms, old_delay, sizeof(old_delay));
+                /* indices 6-10 keep default 250ms already in s_cfg */
+                ESP_LOGI(TAG, "delay: migrated from [6] to [11]");
+            }
+        }
+    }
 
     nvs_close(h);
 
@@ -174,9 +273,15 @@ esp_err_t nvs_config_save_bt_disabled(uint8_t disabled)
     return nvs_save_u8("bt_off", disabled);
 }
 
+void nvs_config_update_zone_cache(uint8_t zone_index, const ld2450_zone_t *zone)
+{
+    if (zone_index >= 10 || !zone) return;
+    s_cfg.zones[zone_index] = *zone;
+}
+
 esp_err_t nvs_config_save_zone(uint8_t zone_index, const ld2450_zone_t *zone)
 {
-    if (zone_index >= 5 || !zone) return ESP_ERR_INVALID_ARG;
+    if (zone_index >= 10 || !zone) return ESP_ERR_INVALID_ARG;
     s_cfg.zones[zone_index] = *zone;
     char key[12];
     snprintf(key, sizeof(key), "zone_%d", zone_index);
@@ -185,7 +290,7 @@ esp_err_t nvs_config_save_zone(uint8_t zone_index, const ld2450_zone_t *zone)
 
 esp_err_t nvs_config_save_occupancy_cooldown(uint8_t endpoint_index, uint16_t sec)
 {
-    if (endpoint_index >= 6) return ESP_ERR_INVALID_ARG;
+    if (endpoint_index >= 11) return ESP_ERR_INVALID_ARG;
     if (sec > 300) sec = 300;
     s_cfg.occupancy_cooldown_sec[endpoint_index] = sec;
     return nvs_save_blob("occ_cool", s_cfg.occupancy_cooldown_sec, sizeof(s_cfg.occupancy_cooldown_sec));
@@ -193,7 +298,7 @@ esp_err_t nvs_config_save_occupancy_cooldown(uint8_t endpoint_index, uint16_t se
 
 esp_err_t nvs_config_save_occupancy_delay(uint8_t endpoint_index, uint16_t ms)
 {
-    if (endpoint_index >= 6) return ESP_ERR_INVALID_ARG;
+    if (endpoint_index >= 11) return ESP_ERR_INVALID_ARG;
     s_cfg.occupancy_delay_ms[endpoint_index] = ms;
     return nvs_save_blob("occ_delay", s_cfg.occupancy_delay_ms, sizeof(s_cfg.occupancy_delay_ms));
 }

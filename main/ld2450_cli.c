@@ -43,17 +43,17 @@ static void print_help(void)
         "  ld en <0|1>\n"
         "  ld mode <single|multi>\n"
         "  ld zones\n"
-        "  ld zone <1-5> <on|off>\n"
-        "  ld zone <1-5> on x1 y1 x2 y2 x3 y3 x4 y4   (meters)\n"
-        "  ld maxdist <mm>              (0-6000)\n"
-        "  ld angle <left> <right>      (0-90 degrees)\n"
+        "  ld zone <1-10> off\n"
+        "  ld zone <1-10> vertices x1 y1 x2 y2 [...] (meters, 3-10 pairs)\n"
+        "  ld maxdist <mm>               (0-6000)\n"
+        "  ld angle <left> <right>       (0-90 degrees)\n"
         "  ld bt <on|off>\n"
         "  ld coords <on|off>\n"
-        "  ld cooldown [seconds]        (set main, show all if no value)\n"
-        "  ld cooldown zone <1-5> <sec> (set zone cooldown)\n"
-        "  ld cooldown all <seconds>    (set all endpoints)\n"
-        "  ld delay [milliseconds]      (set main, show all if no value)\n"
-        "  ld delay zone <1-5> <ms>     (set zone delay)\n"
+        "  ld cooldown [seconds]         (set main, show all if no value)\n"
+        "  ld cooldown zone <1-10> <sec> (set zone cooldown)\n"
+        "  ld cooldown all <seconds>     (set all endpoints)\n"
+        "  ld delay [milliseconds]       (set main, show all if no value)\n"
+        "  ld delay zone <1-10> <ms>     (set zone delay)\n"
         "  ld delay all <milliseconds>  (set all endpoints)\n"
         "  ld config\n"
         "  ld diag                      (show crash diagnostics)\n"
@@ -91,20 +91,37 @@ static void print_state(void)
 
 static void print_zones(void)
 {
-    ld2450_zone_t z[5];
-    if (ld2450_get_zones(z, 5) != ESP_OK) {
+    ld2450_zone_t z[10];
+    if (ld2450_get_zones(z, 10) != ESP_OK) {
         printf("zones: error\n");
         return;
     }
 
-    for (int i = 0; i < 5; i++) {
-        printf("zone%d: %s  v=[(%d,%d) (%d,%d) (%d,%d) (%d,%d)] mm\n",
-               i + 1,
-               z[i].enabled ? "on " : "off",
-               (int)z[i].v[0].x_mm, (int)z[i].v[0].y_mm,
-               (int)z[i].v[1].x_mm, (int)z[i].v[1].y_mm,
-               (int)z[i].v[2].x_mm, (int)z[i].v[2].y_mm,
-               (int)z[i].v[3].x_mm, (int)z[i].v[3].y_mm);
+    nvs_config_t cfg;
+    bool have_cfg = (nvs_config_get(&cfg) == ESP_OK);
+
+    for (int i = 0; i < 10; i++) {
+        if (z[i].vertex_count >= 3) {
+            printf("zone%d: on  vertices=%u  coords=", i + 1, z[i].vertex_count);
+            for (uint8_t v = 0; v < z[i].vertex_count; v++) {
+                if (v > 0) printf(",");
+                printf("%.3f,%.3f",
+                       z[i].v[v].x_mm / 1000.0f,
+                       z[i].v[v].y_mm / 1000.0f);
+            }
+            printf("\n");
+        } else {
+            /* Only annotate when NVS has zone data but driver is off — indicates
+             * a sane check failure (vc>=3 with all-zero coords). Clean disables
+             * (NVS vc=0) show as plain "off". */
+            if (have_cfg && cfg.zones[i].vertex_count >= 3) {
+                printf("zone%d: off [NVS vc=%u v0=(%d,%d) - invalid coords]\n",
+                       i + 1, cfg.zones[i].vertex_count,
+                       cfg.zones[i].v[0].x_mm, cfg.zones[i].v[0].y_mm);
+            } else {
+                printf("zone%d: off\n", i + 1);
+            }
+        }
     }
 }
 
@@ -120,14 +137,20 @@ static void print_config(void)
            cfg.bt_disabled,
            cfg.tracking_mode ? "single" : "multi",
            cfg.publish_coords ? "on" : "off");
-    printf("cooldown: main=%u zone1=%u zone2=%u zone3=%u zone4=%u zone5=%u sec\n",
-           cfg.occupancy_cooldown_sec[0], cfg.occupancy_cooldown_sec[1],
-           cfg.occupancy_cooldown_sec[2], cfg.occupancy_cooldown_sec[3],
-           cfg.occupancy_cooldown_sec[4], cfg.occupancy_cooldown_sec[5]);
-    printf("delay: main=%u zone1=%u zone2=%u zone3=%u zone4=%u zone5=%u ms\n",
-           cfg.occupancy_delay_ms[0], cfg.occupancy_delay_ms[1],
-           cfg.occupancy_delay_ms[2], cfg.occupancy_delay_ms[3],
-           cfg.occupancy_delay_ms[4], cfg.occupancy_delay_ms[5]);
+    printf("cooldown: main=%u z1=%u z2=%u z3=%u z4=%u z5=%u z6=%u z7=%u z8=%u z9=%u z10=%u sec\n",
+           cfg.occupancy_cooldown_sec[0],  cfg.occupancy_cooldown_sec[1],
+           cfg.occupancy_cooldown_sec[2],  cfg.occupancy_cooldown_sec[3],
+           cfg.occupancy_cooldown_sec[4],  cfg.occupancy_cooldown_sec[5],
+           cfg.occupancy_cooldown_sec[6],  cfg.occupancy_cooldown_sec[7],
+           cfg.occupancy_cooldown_sec[8],  cfg.occupancy_cooldown_sec[9],
+           cfg.occupancy_cooldown_sec[10]);
+    printf("delay: main=%u z1=%u z2=%u z3=%u z4=%u z5=%u z6=%u z7=%u z8=%u z9=%u z10=%u ms\n",
+           cfg.occupancy_delay_ms[0],  cfg.occupancy_delay_ms[1],
+           cfg.occupancy_delay_ms[2],  cfg.occupancy_delay_ms[3],
+           cfg.occupancy_delay_ms[4],  cfg.occupancy_delay_ms[5],
+           cfg.occupancy_delay_ms[6],  cfg.occupancy_delay_ms[7],
+           cfg.occupancy_delay_ms[8],  cfg.occupancy_delay_ms[9],
+           cfg.occupancy_delay_ms[10]);
 }
 
 static void print_diag(void)
@@ -229,10 +252,13 @@ static void cli_task(void *arg)
                     /* No arguments - display all values */
                     nvs_config_t cfg;
                     if (nvs_config_get(&cfg) == ESP_OK) {
-                        printf("cooldown: main=%u zone1=%u zone2=%u zone3=%u zone4=%u zone5=%u sec\n",
-                               cfg.occupancy_cooldown_sec[0], cfg.occupancy_cooldown_sec[1],
-                               cfg.occupancy_cooldown_sec[2], cfg.occupancy_cooldown_sec[3],
-                               cfg.occupancy_cooldown_sec[4], cfg.occupancy_cooldown_sec[5]);
+                        printf("cooldown: main=%u z1=%u z2=%u z3=%u z4=%u z5=%u z6=%u z7=%u z8=%u z9=%u z10=%u sec\n",
+                               cfg.occupancy_cooldown_sec[0],  cfg.occupancy_cooldown_sec[1],
+                               cfg.occupancy_cooldown_sec[2],  cfg.occupancy_cooldown_sec[3],
+                               cfg.occupancy_cooldown_sec[4],  cfg.occupancy_cooldown_sec[5],
+                               cfg.occupancy_cooldown_sec[6],  cfg.occupancy_cooldown_sec[7],
+                               cfg.occupancy_cooldown_sec[8],  cfg.occupancy_cooldown_sec[9],
+                               cfg.occupancy_cooldown_sec[10]);
                     } else {
                         printf("cooldown: error reading config\n");
                     }
@@ -244,12 +270,12 @@ static void cli_task(void *arg)
                     char *zone_str = strtok(NULL, " \t\r\n");
                     char *val_str = strtok(NULL, " \t\r\n");
                     if (!zone_str || !val_str) {
-                        printf("usage: ld cooldown zone <1-5> <seconds>\n");
+                        printf("usage: ld cooldown zone <1-10> <seconds>\n");
                         continue;
                     }
                     int zone = atoi(zone_str);
-                    if (zone < 1 || zone > 5) {
-                        printf("zone must be 1-5\n");
+                    if (zone < 1 || zone > 10) {
+                        printf("zone must be 1-10\n");
                         continue;
                     }
                     uint16_t sec = (uint16_t)atoi(val_str);
@@ -311,10 +337,13 @@ static void cli_task(void *arg)
                     /* No arguments - display all values */
                     nvs_config_t cfg;
                     if (nvs_config_get(&cfg) == ESP_OK) {
-                        printf("delay: main=%u zone1=%u zone2=%u zone3=%u zone4=%u zone5=%u ms\n",
-                               cfg.occupancy_delay_ms[0], cfg.occupancy_delay_ms[1],
-                               cfg.occupancy_delay_ms[2], cfg.occupancy_delay_ms[3],
-                               cfg.occupancy_delay_ms[4], cfg.occupancy_delay_ms[5]);
+                        printf("delay: main=%u z1=%u z2=%u z3=%u z4=%u z5=%u z6=%u z7=%u z8=%u z9=%u z10=%u ms\n",
+                               cfg.occupancy_delay_ms[0],  cfg.occupancy_delay_ms[1],
+                               cfg.occupancy_delay_ms[2],  cfg.occupancy_delay_ms[3],
+                               cfg.occupancy_delay_ms[4],  cfg.occupancy_delay_ms[5],
+                               cfg.occupancy_delay_ms[6],  cfg.occupancy_delay_ms[7],
+                               cfg.occupancy_delay_ms[8],  cfg.occupancy_delay_ms[9],
+                               cfg.occupancy_delay_ms[10]);
                     } else {
                         printf("delay: error reading config\n");
                     }
@@ -326,12 +355,12 @@ static void cli_task(void *arg)
                     char *zone_str = strtok(NULL, " \t\r\n");
                     char *val_str = strtok(NULL, " \t\r\n");
                     if (!zone_str || !val_str) {
-                        printf("usage: ld delay zone <1-5> <milliseconds>\n");
+                        printf("usage: ld delay zone <1-10> <milliseconds>\n");
                         continue;
                     }
                     int zone = atoi(zone_str);
-                    if (zone < 1 || zone > 5) {
-                        printf("zone must be 1-5\n");
+                    if (zone < 1 || zone > 10) {
+                        printf("zone must be 1-10\n");
                         continue;
                     }
                     uint16_t ms = (uint16_t)atoi(val_str);
@@ -423,18 +452,20 @@ static void cli_task(void *arg)
 
             if (strcmp(cmd, "zone") == 0) {
                 char *zid = strtok(NULL, " \t\r\n");
-                char *onoff = strtok(NULL, " \t\r\n");
-                if (!zid || !onoff) { printf("usage: ld zone <1-5> <on|off> [coords...]\n"); continue; }
+                if (!zid) { printf("usage: ld zone <1-10> <off|vertices x1 y1 ...>\n"); continue; }
 
                 int zi = atoi(zid) - 1;
-                if (zi < 0 || zi >= 5) { printf("zone id must be 1-5\n"); continue; }
+                if (zi < 0 || zi >= 10) { printf("zone id must be 1-10\n"); continue; }
 
-                ld2450_zone_t all[5];
-                if (ld2450_get_zones(all, 5) != ESP_OK) { printf("zones: error\n"); continue; }
+                char *subcmd = strtok(NULL, " \t\r\n");
+                if (!subcmd) { printf("usage: ld zone <1-10> <off|vertices x1 y1 ...>\n"); continue; }
+
+                ld2450_zone_t all[10];
+                if (ld2450_get_zones(all, 10) != ESP_OK) { printf("zones: error\n"); continue; }
                 ld2450_zone_t z = all[zi];
 
-                if (strcmp(onoff, "off") == 0) {
-                    z.enabled = false;
+                if (strcmp(subcmd, "off") == 0) {
+                    z.vertex_count = 0;
                     if (ld2450_set_zone((size_t)zi, &z) == ESP_OK) {
                         esp_err_t err = nvs_config_save_zone((uint8_t)zi, &z);
                         if (err == ESP_OK) {
@@ -448,38 +479,31 @@ static void cli_task(void *arg)
                     continue;
                 }
 
-                if (strcmp(onoff, "on") != 0) {
-                    printf("usage: ld zone <1-5> <on|off> [coords...]\n");
+                if (strcmp(subcmd, "vertices") != 0) {
+                    printf("usage: ld zone <1-10> <off|vertices x1 y1 ...>\n");
                     continue;
                 }
 
-                char *coords[8];
-                for (int i = 0; i < 8; i++) coords[i] = strtok(NULL, " \t\r\n");
+                /* Read up to 20 coord tokens (10 pairs) */
+                char *coords[20];
+                int ntok = 0;
+                for (int i = 0; i < 20; i++) {
+                    coords[i] = strtok(NULL, " \t\r\n");
+                    if (coords[i]) ntok++;
+                }
 
-                z.enabled = true;
-
-                if (!coords[0]) {
-                    if (ld2450_set_zone((size_t)zi, &z) == ESP_OK) {
-                        esp_err_t err = nvs_config_save_zone((uint8_t)zi, &z);
-                        if (err == ESP_OK) {
-                            printf("zone%d enabled (saved)\n", zi + 1);
-                        } else {
-                            printf("zone%d enabled BUT NVS SAVE FAILED: %s\n", zi + 1, esp_err_to_name(err));
-                        }
-                    } else {
-                        printf("zone%d update failed\n", zi + 1);
-                    }
+                if (ntok == 0 || ntok % 2 != 0) {
+                    printf("vertices requires x y pairs (e.g. 0.5 0.5 1.0 0.5 0.75 1.0)\n");
+                    continue;
+                }
+                int npairs = ntok / 2;
+                if (npairs < 3 || npairs > MAX_ZONE_VERTICES) {
+                    printf("zone requires 3-%d vertex pairs\n", MAX_ZONE_VERTICES);
                     continue;
                 }
 
-                for (int i = 0; i < 8; i++) {
-                    if (!coords[i]) {
-                        printf("usage: ld zone <1-5> on x1 y1 x2 y2 x3 y3 x4 y4 (meters)\n");
-                        goto zone_done;
-                    }
-                }
-
-                for (int i = 0; i < 4; i++) {
+                z.vertex_count = (uint8_t)npairs;
+                for (int i = 0; i < npairs; i++) {
                     float xm = strtof(coords[i*2 + 0], NULL);
                     float ym = strtof(coords[i*2 + 1], NULL);
                     z.v[i].x_mm = m_to_mm(xm);
@@ -494,10 +518,10 @@ static void cli_task(void *arg)
                         printf("zone%d set BUT NVS SAVE FAILED: %s\n", zi + 1, esp_err_to_name(err));
                     }
                 } else {
-                    printf("zone%d update failed\n", zi + 1);
+                    printf("zone%d update failed (all coords must be within +/-%dm)\n",
+                           zi + 1, ZONE_COORD_LIMIT_MM / 1000);
                 }
 
-zone_done:
                 continue;
             }
 

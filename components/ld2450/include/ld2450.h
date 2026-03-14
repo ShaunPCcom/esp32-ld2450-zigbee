@@ -49,10 +49,10 @@ typedef struct {
     ld2450_target_t targets[3];
 
     // Per-zone occupancy (true = occupied)
-    bool zone_occupied[5];
+    bool zone_occupied[10];
 
-    // 5-bit bitmap: bit0=zone1 ... bit4=zone5
-    uint8_t zone_bitmap;
+    // 10-bit bitmap: bit0=zone1 ... bit9=zone10
+    uint16_t zone_bitmap;
 } ld2450_state_t;
 
 // Thread-safe: snapshot current config/state
@@ -66,7 +66,6 @@ esp_err_t ld2450_set_publish_coords(bool enable);
 
 // Thread-safe zone access (mm internally)
 esp_err_t ld2450_get_zones(ld2450_zone_t *out, size_t count);
-esp_err_t ld2450_set_zones(const ld2450_zone_t *zones, size_t count);
 esp_err_t ld2450_set_zone(size_t zone_index, const ld2450_zone_t *zone);
 
 // Access UART port (for command module)

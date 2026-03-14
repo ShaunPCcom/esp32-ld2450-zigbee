@@ -15,16 +15,15 @@
 #include "ld2450_parser.h"
 #include "ld2450_zone.h"
 
-#define LD2450_ZONE_COUNT 5
+#define LD2450_ZONE_COUNT 10
 #define ZONE_ID_USER(z) ((z) + 1)
 
 static ld2450_zone_t s_zones[LD2450_ZONE_COUNT] = {
-    // Example placeholders (you will replace these later from HA/Zigbee config)
-    { .enabled=true, .v={{0,500},{500,500},{500,1500},{0,1500}} },     // Zone0
-    { .enabled=false, .v={{0,0},{0,0},{0,0},{0,0}} },                  // Zone1
-    { .enabled=false, .v={{0,0},{0,0},{0,0},{0,0}} },                  // Zone2
-    { .enabled=false, .v={{0,0},{0,0},{0,0},{0,0}} },                  // Zone3
-    { .enabled=false, .v={{0,0},{0,0},{0,0},{0,0}} },                  // Zone4
+    /* vertex_count < 3 = disabled (all 10 zones start disabled) */
+    { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+    { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+    { .vertex_count = 0 }, { .vertex_count = 0 }, { .vertex_count = 0 },
+    { .vertex_count = 0 },
 };
 
 static const char *TAG = "ld2450";
@@ -47,12 +46,18 @@ static ld2450_state_t s_state = {0};
 
 static bool zone_vertices_sane(const ld2450_zone_t *z)
 {
-    // Minimal sanity: enabled zones shouldn't be all-zero vertices.
-    if (!z->enabled) return true;
-    for (int i = 0; i < 4; i++) {
-        if (z->v[i].x_mm != 0 || z->v[i].y_mm != 0) return true;
+    // Disabled zones are always sane.
+    if (z->vertex_count < 3) return true;
+
+    bool any_nonzero = false;
+    for (int i = 0; i < z->vertex_count; i++) {
+        // Reject coordinates beyond the sensor's physical reach.
+        // x is left/right (signed); y is depth (always positive — sensor only sees forward).
+        if (z->v[i].x_mm < -ZONE_COORD_LIMIT_MM || z->v[i].x_mm > ZONE_COORD_LIMIT_MM) return false;
+        if (z->v[i].y_mm < 0                     || z->v[i].y_mm > ZONE_COORD_LIMIT_MM) return false;
+        if (z->v[i].x_mm != 0 || z->v[i].y_mm != 0) any_nonzero = true;
     }
-    return false;
+    return any_nonzero;
 }
 
 static ld2450_target_t select_single_target(const ld2450_report_t *r)
@@ -171,8 +176,7 @@ static void ld2450_uart_task(void *arg)
 
                 if (cfg.enabled && r->occupied) {
                     for (unsigned zi = 0; zi < LD2450_ZONE_COUNT; zi++) {
-                        if (!s_zones[zi].enabled)
-                            continue;
+                        /* ld2450_zone_contains_point returns false when vertex_count < 3 */
 
                         if (cfg.mode == LD2450_TRACK_SINGLE) {
                             ld2450_point_t p = { .x_mm = selected.x_mm, .y_mm = selected.y_mm };
@@ -198,7 +202,7 @@ static void ld2450_uart_task(void *arg)
 
                 // ---- Zone change logging + bitmap ----
                 static bool last_zone_occ[LD2450_ZONE_COUNT] = {0};
-                uint8_t zone_bitmap = 0;
+                uint16_t zone_bitmap = 0;
 
                 for (unsigned zi = 0; zi < LD2450_ZONE_COUNT; zi++) {
                     if (zone_occ[zi]) zone_bitmap |= (1u << zi);
@@ -347,21 +351,6 @@ esp_err_t ld2450_get_zones(ld2450_zone_t *out, size_t count)
     if (count < LD2450_ZONE_COUNT) return ESP_ERR_INVALID_SIZE;
     portENTER_CRITICAL(&s_lock);
     memcpy(out, s_zones, sizeof(s_zones));
-    portEXIT_CRITICAL(&s_lock);
-    return ESP_OK;
-}
-
-esp_err_t ld2450_set_zones(const ld2450_zone_t *zones, size_t count)
-{
-    if (!zones) return ESP_ERR_INVALID_ARG;
-    if (count != LD2450_ZONE_COUNT) return ESP_ERR_INVALID_SIZE;
-
-    for (size_t i = 0; i < LD2450_ZONE_COUNT; i++) {
-        if (!zone_vertices_sane(&zones[i])) return ESP_ERR_INVALID_ARG;
-    }
-
-    portENTER_CRITICAL(&s_lock);
-    memcpy(s_zones, zones, sizeof(s_zones));
     portEXIT_CRITICAL(&s_lock);
     return ESP_OK;
 }

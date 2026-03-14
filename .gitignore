@@ -17,6 +17,8 @@ compile_commands.json
 # host_test build outputs
 tools/host_test/test_ld2450_parser
 tools/host_test/test_ld2450_parser_stream
+components/ld2450/test/test_ld2450_zone
+components/ld2450/test/test_ld2450_zone_csv
 
 # IDE files
 .vscode/

@@ -19,11 +19,13 @@ static bool point_on_segment(ld2450_point_t p, ld2450_point_t a, ld2450_point_t 
 
 bool ld2450_zone_contains_point(const ld2450_zone_t *z, ld2450_point_t p)
 {
-    if (!z || !z->enabled) return false;
+    if (!z || z->vertex_count < 3) return false;
 
-    // Ray casting to the right
+    int n = (int)z->vertex_count;
+
+    // Ray casting to the right — generalized for n vertices
     bool inside = false;
-    for (int i = 0, j = 3; i < 4; j = i++) {
+    for (int i = 0, j = n - 1; i < n; j = i++) {
         ld2450_point_t a = z->v[j];
         ld2450_point_t b = z->v[i];
 

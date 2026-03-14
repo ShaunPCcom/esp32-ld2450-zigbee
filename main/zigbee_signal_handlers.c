@@ -16,6 +16,7 @@
 #include "nvs_config.h"
 #include "sensor_bridge.h"
 #include "zigbee_defs.h"
+#include "zigbee_init.h"
 #include "zigbee_signal_handlers.h"
 
 static const char *TAG = "zigbee_signal";
@@ -57,6 +58,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
                 ESP_LOGI(TAG, "Device rebooted, already commissioned");
                 board_led_set_state_joined();
                 s_network_joined = true;
+                zigbee_sync_zone_attrs_from_nvs();
                 sensor_bridge_start();
             }
         } else {
@@ -70,6 +72,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
             ESP_LOGI(TAG, "Joined network successfully");
             board_led_set_state_joined();
             s_network_joined = true;
+            zigbee_sync_zone_attrs_from_nvs();
             sensor_bridge_start();
         } else {
             ESP_LOGW(TAG, "Steering failed (%s), retrying...", esp_err_to_name(status));

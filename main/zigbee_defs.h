@@ -7,16 +7,16 @@
 
 /* ---- Endpoint numbers ---- */
 #define ZB_EP_MAIN          1       /* Main device: overall occupancy + config */
-#define ZB_EP_ZONE_BASE     2       /* Zones 1-5 are endpoints 2-6 */
-#define ZB_EP_ZONE_COUNT    5
-#define ZB_EP_ZONE(n)       (ZB_EP_ZONE_BASE + (n))  /* n = 0..4 */
+#define ZB_EP_ZONE_BASE     2       /* Zones 1-10 are endpoints 2-11 */
+#define ZB_EP_ZONE_COUNT    10
+#define ZB_EP_ZONE(n)       (ZB_EP_ZONE_BASE + (n))  /* n = 0..9 */
 
 /* ---- Device type ---- */
 #define ZB_DEVICE_ID_OCCUPANCY_SENSOR  0x0107
 
 /* ---- Custom cluster IDs (manufacturer-specific range 0xFC00-0xFFFE) ---- */
-#define ZB_CLUSTER_LD2450_CONFIG       0xFC00  /* EP 1: target data + sensor config */
-#define ZB_CLUSTER_LD2450_ZONE         0xFC01  /* EP 2-6: zone vertex config */
+#define ZB_CLUSTER_LD2450_CONFIG       0xFC00  /* EP 1: target data + sensor config + zone config */
+/* ZB_CLUSTER_LD2450_ZONE 0xFC01 removed — zone config consolidated to EP1 cluster 0xFC00 */
 
 /* ---- Attributes on ZB_CLUSTER_LD2450_CONFIG (EP 1) ---- */
 #define ZB_ATTR_TARGET_COUNT           0x0000  /* U8, read-only + reportable */
@@ -37,16 +37,18 @@
 
 /* ZB_ATTR_RESTART (0x00F0) and ZB_ATTR_FACTORY_RESET (0x00F1) defined in zigbee_ctrl.h */
 
-/* ---- Attributes on ZB_CLUSTER_LD2450_ZONE (EP 2-6) ---- */
-#define ZB_ATTR_ZONE_X1                0x0000  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_Y1                0x0001  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_X2                0x0002  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_Y2                0x0003  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_X3                0x0004  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_Y3                0x0005  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_X4                0x0006  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_Y4                0x0007  /* S16, read-write (mm) */
-#define ZB_ATTR_ZONE_VERTEX_COUNT      8       /* Total vertex attrs per zone EP */
+/* ---- Zone config attributes on EP1 cluster 0xFC00 ---- */
+/* Base: 0x0040, 4 attrs per zone, n = 0..9 (firmware 0-indexed; Z2M uses 1-indexed zone_1..zone_10) */
+/* Zone N attr range: 0x0040 + N*4 .. 0x0043 + N*4. Zone 9 last attr = 0x006B */
+#define ZB_ZONE_ATTR_BASE(n)           (0x0040 + (n) * 4)
+#define ZB_ATTR_ZONE_VERTEX_COUNT(n)   (ZB_ZONE_ATTR_BASE(n) + 0)  /* U8,  read-write */
+#define ZB_ATTR_ZONE_COORDS(n)         (ZB_ZONE_ATTR_BASE(n) + 1)  /* CHAR_STRING, read-write */
+#define ZB_ATTR_ZONE_COOLDOWN(n)       (ZB_ZONE_ATTR_BASE(n) + 2)  /* U16, read-write (0-300 sec) */
+#define ZB_ATTR_ZONE_DELAY(n)          (ZB_ZONE_ATTR_BASE(n) + 3)  /* U16, read-write (0-65535 ms) */
+
+/* Max bytes for a zone coords ZCL CHAR_STRING (length prefix byte + CSV payload) */
+/* 10 vertices × 2 coords × max 6 chars + 9 commas per pair group + separating commas ≈ 153 chars */
+#define ZB_ZONE_COORDS_MAX_LEN         160
 
 /* ---- Identity strings ---- */
 #define ZB_MANUFACTURER_NAME           "\x07""LD2450Z"   /* ZCL string: len byte + chars */

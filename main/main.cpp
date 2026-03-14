@@ -37,8 +37,12 @@ static void apply_saved_config(const nvs_config_t *cfg)
     ld2450_set_tracking_mode(cfg->tracking_mode == 1 ? LD2450_TRACK_SINGLE : LD2450_TRACK_MULTI);
     ld2450_set_publish_coords(cfg->publish_coords != 0);
 
-    /* Load saved zones */
-    ld2450_set_zones(cfg->zones, 5);
+    /* Load saved zones individually — batch set_zones rejects all if any zone
+     * has vertex_count>=3 with all-zero coords (e.g. Z2M auto-populated placeholder).
+     * Per-zone calls let valid zones load while placeholders stay disabled. */
+    for (int i = 0; i < 10; i++) {
+        ld2450_set_zone((size_t)i, &cfg->zones[i]);
+    }
 
     /* Allow sensor time to boot before sending commands */
     vTaskDelay(pdMS_TO_TICKS(200));
@@ -129,11 +133,7 @@ extern "C" void app_main(void)
     }
 }
 
-/* C wrappers for C++ BoardLed API (called from zigbee_app.c) */
-extern "C" void board_led_set_state_off(void) {
-    if (g_board_led) g_board_led->set_state(BoardLed::State::OFF);
-}
-
+/* C wrappers for C++ BoardLed API (called from C modules) */
 extern "C" void board_led_set_state_not_joined(void) {
     if (g_board_led) g_board_led->set_state(BoardLed::State::NOT_JOINED);
 }

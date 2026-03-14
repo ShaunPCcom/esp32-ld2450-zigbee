@@ -34,18 +34,18 @@ static const char *TAG = "sensor_bridge";
 
 /* ---- State tracking for change detection ---- */
 static bool s_last_occupied = false;
-static bool s_last_zone_occ[5] = {false};
+static bool s_last_zone_occ[10] = {false};
 static uint8_t s_last_target_count = 0;
 static char s_last_coords[64] = {0};
 
-/* ---- Cooldown tracking (per endpoint: 0=main, 1-5=zones) ---- */
-static uint32_t s_last_report_time[6] = {0};
-static bool s_pending_clear[6] = {false};      /* tracking pending Clear reports */
-static uint32_t s_clear_start_time[6] = {0};  /* when Clear was first detected */
+/* ---- Cooldown tracking (per endpoint: 0=main, 1-10=zones) ---- */
+static uint32_t s_last_report_time[11] = {0};
+static bool s_pending_clear[11] = {false};      /* tracking pending Clear reports */
+static uint32_t s_clear_start_time[11] = {0};  /* when Clear was first detected */
 
-/* ---- Occupancy delay tracking (per endpoint: 0=main, 1-5=zones) ---- */
-static bool s_pending_occupied[6] = {false};      /* tracking pending Occupied reports */
-static int64_t s_occupied_start_time[6] = {0};   /* when Occupied was first detected (microseconds) */
+/* ---- Occupancy delay tracking (per endpoint: 0=main, 1-10=zones) ---- */
+static bool s_pending_occupied[11] = {false};      /* tracking pending Occupied reports */
+static int64_t s_occupied_start_time[11] = {0};   /* when Occupied was first detected (microseconds) */
 static uint32_t s_last_min_free_heap = 0;
 
 /* ================================================================== */
@@ -158,8 +158,8 @@ static void sensor_poll_cb(uint8_t param)
         }
     }
 
-    /* EPs 2-6: Per-zone occupancy */
-    for (int i = 0; i < 5; i++) {
+    /* EPs 2-11: Per-zone occupancy */
+    for (int i = 0; i < 10; i++) {
         bool zone_occ = state.zone_occupied[i];
         uint32_t zone_cooldown_ticks = pdMS_TO_TICKS(cfg.occupancy_cooldown_sec[i + 1] * 1000);
         int64_t zone_delay_us = cfg.occupancy_delay_ms[i + 1] * 1000LL;

@@ -15,6 +15,7 @@
 #include "board_config.h"
 #include "board_led.h"
 #include "crash_diag.h"
+#include "ld2450_zone_csv.h"
 #include "nvs_config.h"
 #include "version.h"
 #include "zigbee_attr_handler.h"
@@ -156,6 +157,39 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
         ESP_ZB_ZCL_ATTR_ACCESS_WRITE_ONLY,
         &s_factory_reset_attr);
 
+    /* Zone config attributes (0x0040-0x006B): 4 attrs × 10 zones on EP1 */
+    static uint8_t  s_zone_vc[10]  = {0};
+    static char     s_zone_csv[10][ZB_ZONE_COORDS_MAX_LEN]; /* ZCL CHAR_STRING buffers */
+    static uint16_t s_zone_cool[10] = {0};
+    static uint16_t s_zone_delay[10] = {250, 250, 250, 250, 250, 250, 250, 250, 250, 250};
+
+    memset(s_zone_csv, 0, sizeof(s_zone_csv));
+    for (int n = 0; n < 10; n++) {
+        esp_zb_custom_cluster_add_custom_attr(custom,
+            ZB_ATTR_ZONE_VERTEX_COUNT(n),
+            ESP_ZB_ZCL_ATTR_TYPE_U8,
+            ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+            &s_zone_vc[n]);
+
+        esp_zb_custom_cluster_add_custom_attr(custom,
+            ZB_ATTR_ZONE_COORDS(n),
+            ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+            ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+            s_zone_csv[n]);
+
+        esp_zb_custom_cluster_add_custom_attr(custom,
+            ZB_ATTR_ZONE_COOLDOWN(n),
+            ESP_ZB_ZCL_ATTR_TYPE_U16,
+            ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+            &s_zone_cool[n]);
+
+        esp_zb_custom_cluster_add_custom_attr(custom,
+            ZB_ATTR_ZONE_DELAY(n),
+            ESP_ZB_ZCL_ATTR_TYPE_U16,
+            ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+            &s_zone_delay[n]);
+    }
+
     /* Assemble cluster list */
     esp_zb_cluster_list_t *cl = esp_zb_zcl_cluster_list_create();
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(cl, basic, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
@@ -175,9 +209,11 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
     return cl;
 }
 
-static esp_zb_cluster_list_t *create_zone_ep_clusters(uint8_t zone_idx)
+/* Zone EPs (2-11) are occupancy-sensing only.
+ * All zone geometry/cooldown/delay config lives on EP1 cluster 0xFC00. */
+static esp_zb_cluster_list_t *create_zone_ep_clusters(void)
 {
-    /* Basic cluster (minimal for zone endpoints) */
+    /* Basic cluster (required for Z2M re-interview — must carry mfr/model/sw_build_id) */
     esp_zb_basic_cluster_cfg_t basic_cfg = {
         .zcl_version  = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
         .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DC_SOURCE,
@@ -198,54 +234,17 @@ static esp_zb_cluster_list_t *create_zone_ep_clusters(uint8_t zone_idx)
 
     /* Occupancy Sensing cluster */
     esp_zb_occupancy_sensing_cluster_cfg_t occ_cfg = {
-        .occupancy         = 0,
-        .sensor_type       = ESP_ZB_ZCL_OCCUPANCY_SENSING_OCCUPANCY_SENSOR_TYPE_RESERVED,
+        .occupancy          = 0,
+        .sensor_type        = ESP_ZB_ZCL_OCCUPANCY_SENSING_OCCUPANCY_SENSOR_TYPE_RESERVED,
         .sensor_type_bitmap = (1 << 2),
     };
     esp_zb_attribute_list_t *occ = esp_zb_occupancy_sensing_cluster_create(&occ_cfg);
 
-    /* Custom cluster 0xFC01 - Zone vertex config */
-    esp_zb_attribute_list_t *zone_custom = esp_zb_zcl_attr_list_create(ZB_CLUSTER_LD2450_ZONE);
-
-    /* Load zone vertices from NVS */
-    nvs_config_t cfg;
-    nvs_config_get(&cfg);
-    const ld2450_zone_t *z = &cfg.zones[zone_idx];
-
-    for (int v = 0; v < ZB_ATTR_ZONE_VERTEX_COUNT; v++) {
-        int16_t val;
-        int vi = v / 2;  /* vertex index 0-3 */
-        if (v % 2 == 0) {
-            val = z->v[vi].x_mm;
-        } else {
-            val = z->v[vi].y_mm;
-        }
-        esp_zb_custom_cluster_add_custom_attr(zone_custom, (uint16_t)v,
-            ESP_ZB_ZCL_ATTR_TYPE_S16,
-            ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
-            &val);
-    }
-
-    /* Add occupancy cooldown attribute for this zone */
-    uint16_t zone_cooldown = cfg.occupancy_cooldown_sec[zone_idx + 1];
-    esp_zb_custom_cluster_add_custom_attr(zone_custom, ZB_ATTR_OCCUPANCY_COOLDOWN,
-        ESP_ZB_ZCL_ATTR_TYPE_U16,
-        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
-        &zone_cooldown);
-
-    /* Add occupancy delay attribute for this zone */
-    uint16_t zone_delay = cfg.occupancy_delay_ms[zone_idx + 1];
-    esp_zb_custom_cluster_add_custom_attr(zone_custom, ZB_ATTR_OCCUPANCY_DELAY,
-        ESP_ZB_ZCL_ATTR_TYPE_U16,
-        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
-        &zone_delay);
-
-    /* Assemble cluster list */
+    /* Assemble — no custom cluster on zone EPs */
     esp_zb_cluster_list_t *cl = esp_zb_zcl_cluster_list_create();
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(cl, basic, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(cl, identify, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_occupancy_sensing_cluster(cl, occ, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_custom_cluster(cl, zone_custom, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
 
     return cl;
 }
@@ -267,7 +266,7 @@ static void zigbee_register_endpoints(void)
     };
     ESP_ERROR_CHECK(esp_zb_ep_list_add_ep(ep_list, create_main_ep_clusters(), main_ep_cfg));
 
-    /* EPs 2-6: Zone occupancy */
+    /* EPs 2-11: Zone occupancy (occupancy sensing only — config lives on EP1) */
     for (int i = 0; i < ZB_EP_ZONE_COUNT; i++) {
         esp_zb_endpoint_config_t zone_ep_cfg = {
             .endpoint       = ZB_EP_ZONE(i),
@@ -275,7 +274,7 @@ static void zigbee_register_endpoints(void)
             .app_device_id  = ZB_DEVICE_ID_OCCUPANCY_SENSOR,
             .app_device_version = 0,
         };
-        ESP_ERROR_CHECK(esp_zb_ep_list_add_ep(ep_list, create_zone_ep_clusters((uint8_t)i), zone_ep_cfg));
+        ESP_ERROR_CHECK(esp_zb_ep_list_add_ep(ep_list, create_zone_ep_clusters(), zone_ep_cfg));
     }
 
     ESP_ERROR_CHECK(esp_zb_device_register(ep_list));
@@ -297,6 +296,10 @@ static void zigbee_task(void *pv)
     platform_cfg.host_config.host_connection_mode = ZB_HOST_CONNECTION_MODE_NONE;
 
     ESP_ERROR_CHECK(esp_zb_platform_config(&platform_cfg));
+
+    /* Increase binding table: EP1 (2) + 10 zone EPs (10) = 12 minimum; 24 gives headroom */
+    esp_zb_aps_src_binding_table_size_set(24);
+    esp_zb_aps_dst_binding_table_size_set(24);
 
     esp_zb_cfg_t zb_cfg = {0};
     zb_cfg.esp_zb_role = (
@@ -323,6 +326,44 @@ static void zigbee_task(void *pv)
     }
     /* Continue to main loop regardless - steering retry will handle network connection */
     esp_zb_stack_main_loop();
+}
+
+/* ================================================================== */
+/*  Sync zone attrs from NVS after stack starts                        */
+/* ================================================================== */
+
+void zigbee_sync_zone_attrs_from_nvs(void)
+{
+    nvs_config_t cfg;
+    nvs_config_get(&cfg);
+
+    for (int n = 0; n < 10; n++) {
+        const ld2450_zone_t *z = &cfg.zones[n];
+
+        /* vertex_count */
+        uint8_t vc = z->vertex_count;
+        esp_zb_zcl_set_attribute_val(ZB_EP_MAIN, ZB_CLUSTER_LD2450_CONFIG,
+            ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ZB_ATTR_ZONE_VERTEX_COUNT(n), &vc, false);
+
+        /* coords CSV — ZCL CHAR_STRING: first byte = length */
+        char csv[ZB_ZONE_COORDS_MAX_LEN - 1];
+        zone_to_csv(z, csv, sizeof(csv));
+        uint8_t zcl_str[ZB_ZONE_COORDS_MAX_LEN];
+        zcl_str[0] = (uint8_t)strlen(csv);
+        memcpy(zcl_str + 1, csv, zcl_str[0]);
+        esp_zb_zcl_set_attribute_val(ZB_EP_MAIN, ZB_CLUSTER_LD2450_CONFIG,
+            ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ZB_ATTR_ZONE_COORDS(n), zcl_str, false);
+
+        /* cooldown and delay (index n+1: 0=main EP, 1-10=zones) */
+        uint16_t cool  = cfg.occupancy_cooldown_sec[n + 1];
+        uint16_t delay = cfg.occupancy_delay_ms[n + 1];
+        esp_zb_zcl_set_attribute_val(ZB_EP_MAIN, ZB_CLUSTER_LD2450_CONFIG,
+            ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ZB_ATTR_ZONE_COOLDOWN(n), &cool, false);
+        esp_zb_zcl_set_attribute_val(ZB_EP_MAIN, ZB_CLUSTER_LD2450_CONFIG,
+            ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ZB_ATTR_ZONE_DELAY(n), &delay, false);
+    }
+
+    ESP_LOGI(TAG, "Zone attrs synced from NVS");
 }
 
 /* ================================================================== */

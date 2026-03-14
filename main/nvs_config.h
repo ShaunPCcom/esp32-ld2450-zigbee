@@ -23,11 +23,11 @@ typedef struct {
     uint8_t bt_disabled;        /* 0=BT on, 1=BT off */
 
     /* Zones */
-    ld2450_zone_t zones[5];
+    ld2450_zone_t zones[10];
 
     /* Occupancy reporting */
-    uint16_t occupancy_cooldown_sec[6];  /* 0-300 seconds per endpoint: [0]=main, [1-5]=zones */
-    uint16_t occupancy_delay_ms[6];      /* 0-65535 milliseconds per endpoint: [0]=main, [1-5]=zones */
+    uint16_t occupancy_cooldown_sec[11]; /* 0-300 seconds per endpoint: [0]=main, [1-10]=zones */
+    uint16_t occupancy_delay_ms[11];     /* 0-65535 milliseconds per endpoint: [0]=main, [1-10]=zones */
 } nvs_config_t;
 
 /** Initialize NVS config module and load saved config (or defaults). */
@@ -44,5 +44,11 @@ esp_err_t nvs_config_save_angle_left(uint8_t deg);
 esp_err_t nvs_config_save_angle_right(uint8_t deg);
 esp_err_t nvs_config_save_bt_disabled(uint8_t disabled);
 esp_err_t nvs_config_save_zone(uint8_t zone_index, const ld2450_zone_t *zone);
+
+/** Update the in-memory zone cache without writing to NVS flash.
+ *  Used during the two-phase write protocol: vertex_count arrives before coords.
+ *  Call this when vertex_count >= 3 but coords are not yet present.
+ *  The subsequent coords write will call nvs_config_save_zone to persist. */
+void nvs_config_update_zone_cache(uint8_t zone_index, const ld2450_zone_t *zone);
 esp_err_t nvs_config_save_occupancy_cooldown(uint8_t endpoint_index, uint16_t sec);
 esp_err_t nvs_config_save_occupancy_delay(uint8_t endpoint_index, uint16_t ms);

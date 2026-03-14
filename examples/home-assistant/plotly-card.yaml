@@ -3,7 +3,7 @@
 #
 # Based on: Anthony Hua's LD2450-map-chart.yaml
 # https://github.com/athua/ha-utils/blob/main/LD2450-map-chart.yaml
-# Modified for Zigbee entity naming and 5-zone support
+# Modified for Zigbee entity naming, 10-zone support, and CSV coordinate format
 #
 # Prerequisites:
 # - Plotly Graph Card installed via HACS
@@ -83,16 +83,8 @@ entities:
       color: RGBA(20,200,0,0.2)
       shape: line
       width: 2
-    x:
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_x1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_x2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_x3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_x4"].state /1
-    "y":
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_y1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_y2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_y3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_1_y4"].state /1
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_1_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_1_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
   - entity: ""
     name: Zone2
     mode: lines
@@ -102,16 +94,8 @@ entities:
       color: RGBA(200,0,255,0.2)
       shape: line
       width: 2
-    x:
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_x1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_x2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_x3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_x4"].state /1
-    "y":
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_y1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_y2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_y3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_2_y4"].state /1
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_2_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_2_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
   - entity: ""
     name: Zone3
     mode: lines
@@ -121,16 +105,8 @@ entities:
       color: RGBA(200,120,55,0.2)
       shape: line
       width: 2
-    x:
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_x1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_x2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_x3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_x4"].state /1
-    "y":
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_y1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_y2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_y3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_3_y4"].state /1
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_3_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_3_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
   - entity: ""
     name: Zone4
     mode: lines
@@ -140,16 +116,8 @@ entities:
       color: RGBA(200,220,55,0.2)
       shape: line
       width: 2
-    x:
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_x1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_x2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_x3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_x4"].state /1
-    "y":
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_y1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_y2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_y3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_4_y4"].state /1
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_4_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_4_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
   - entity: ""
     name: Zone5
     mode: lines
@@ -159,16 +127,63 @@ entities:
       color: RGBA(120,55,55,0.4)
       shape: line
       width: 2
-    x:
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_x1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_x2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_x3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_x4"].state /1
-    "y":
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_y1"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_y2"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_y3"].state /1
-      - $ex hass.states["number.YOUR_DEVICE_ID_zone_5_y4"].state /1
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_5_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_5_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
+  - entity: ""
+    name: Zone6
+    mode: lines
+    fill: toself
+    fillcolor: RGBA(0,180,220,0.1)
+    line:
+      color: RGBA(0,180,220,0.2)
+      shape: line
+      width: 2
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_6_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_6_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
+  - entity: ""
+    name: Zone7
+    mode: lines
+    fill: toself
+    fillcolor: RGBA(220,100,0,0.1)
+    line:
+      color: RGBA(220,100,0,0.2)
+      shape: line
+      width: 2
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_7_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_7_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
+  - entity: ""
+    name: Zone8
+    mode: lines
+    fill: toself
+    fillcolor: RGBA(180,0,80,0.1)
+    line:
+      color: RGBA(180,0,80,0.2)
+      shape: line
+      width: 2
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_8_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_8_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
+  - entity: ""
+    name: Zone9
+    mode: lines
+    fill: toself
+    fillcolor: RGBA(0,140,100,0.1)
+    line:
+      color: RGBA(0,140,100,0.2)
+      shape: line
+      width: 2
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_9_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_9_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
+  - entity: ""
+    name: Zone10
+    mode: lines
+    fill: toself
+    fillcolor: RGBA(120,120,0,0.2)
+    line:
+      color: RGBA(120,120,0,0.3)
+      shape: line
+      width: 2
+    x: "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_10_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const x=v.filter((_,i)=>i%2===0); return x.length>2?[...x,x[0]]:x; }"
+    "y": "$fn ({hass}) => { const s=(hass.states['text.YOUR_DEVICE_ID_zone_10_coords']||{}).state||''; if(!s||s==='unknown'||s==='')return[null]; const v=s.split(',').map(Number); const y=v.filter((_,i)=>i%2===1); return y.length>2?[...y,y[0]]:y; }"
   - entity: ""
     name: Coverage
     mode: lines
@@ -213,4 +228,3 @@ entities:
 raw_plotly_config: true
 grid_options:
   columns: full
-
