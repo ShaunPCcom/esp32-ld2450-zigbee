@@ -48,6 +48,23 @@ static bool s_pending_occupied[11] = {false};      /* tracking pending Occupied 
 static int64_t s_occupied_start_time[11] = {0};   /* when Occupied was first detected (microseconds) */
 static uint32_t s_last_min_free_heap = 0;
 
+/* ---- Raw state tracking (transition detection, independent of reported state) ----
+ *
+ * s_last_occupied / s_last_zone_occ track the last *reported* state and must
+ * only be updated when an attribute report is actually sent.  Using them for
+ * transition detection causes the delay-cancellation path to be skipped when
+ * occupancy clears during the delay window (before a report fires), because
+ * "current_clear != last_reported_clear" evaluates false.  This leaves
+ * s_pending_occupied stuck true with a stale timestamp, causing the next real
+ * detection to fire immediately (no delay) — observed as Zone 1 reporting
+ * before Zone 2 and general light-response sluggishness across rooms.
+ *
+ * s_raw_occupied / s_raw_zone_occ track the actual sensor state every poll
+ * cycle and are the correct variables for edge-detection.
+ */
+static bool s_raw_occupied = false;
+static bool s_raw_zone_occ[10] = {false};
+
 /* ================================================================== */
 /*  Sensor bridge: poll LD2450 and update Zigbee attributes            */
 /* ================================================================== */
@@ -106,7 +123,9 @@ static void sensor_poll_cb(uint8_t param)
     uint32_t main_cooldown_ticks = pdMS_TO_TICKS(cfg.occupancy_cooldown_sec[0] * 1000);
     int64_t main_delay_us = cfg.occupancy_delay_ms[0] * 1000LL;
 
-    if (occupied != s_last_occupied) {
+    bool raw_was_occupied = s_raw_occupied;
+    s_raw_occupied = occupied;
+    if (occupied != raw_was_occupied) {
         if (!occupied) {
             /* State went Occupied → Clear: Cancel pending occupied, start cooldown */
             s_pending_occupied[0] = false;
@@ -164,7 +183,9 @@ static void sensor_poll_cb(uint8_t param)
         uint32_t zone_cooldown_ticks = pdMS_TO_TICKS(cfg.occupancy_cooldown_sec[i + 1] * 1000);
         int64_t zone_delay_us = cfg.occupancy_delay_ms[i + 1] * 1000LL;
 
-        if (zone_occ != s_last_zone_occ[i]) {
+        bool raw_was = s_raw_zone_occ[i];
+        s_raw_zone_occ[i] = zone_occ;
+        if (zone_occ != raw_was) {
             if (!zone_occ) {
                 /* State went Occupied → Clear: Cancel pending occupied, start cooldown */
                 s_pending_occupied[i + 1] = false;

@@ -264,6 +264,11 @@ ld cooldown 10            # Set main sensor cooldown
 ld cooldown zone 1 15    # Set zone 1 cooldown (zones 1-10)
 ld cooldown all 10       # Set all 11 endpoints to same value
 
+# Set occupancy delay (ms before reporting Occupied)
+ld delay 250             # Set main sensor delay
+ld delay zone 1 500      # Set zone 1 delay (zones 1-10)
+ld delay all 250         # Set all 11 endpoints to same value
+
 # Bluetooth control
 ld bt off
 
@@ -315,7 +320,7 @@ The **occupancy cooldown** feature prevents false "unoccupied" reports when some
 - The sensor does NOT report "Clear" immediately
 - After the cooldown period expires, if still clear, "Clear" is reported
 - If occupancy returns during the cooldown, the "Clear" report is cancelled (never sent)
-- When occupancy is **detected**, it's always reported immediately (no delay)
+- When occupancy is **detected**, an optional delay (default 250 ms) can be configured before reporting — see [Occupancy Delay](#occupancy-delay) below
 
 **Typical values:**
 - `0 seconds` (default): Immediate reporting, no debouncing
@@ -336,6 +341,34 @@ Each of the 11 endpoints (main + 10 zones) has its own independent cooldown valu
 - **Hallway**: 5s (want quick clearing for transit areas)
 - **Bathroom**: 120s (people often move out of view briefly)
 - **Office zone (desk)**: 10s (balance between responsiveness and stability)
+
+## Occupancy Delay
+
+The **occupancy delay** feature prevents false "occupied" reports from brief detections (e.g., a hand wave, sensor noise, or someone passing through without entering). This is sometimes called anti-ghosting.
+
+**How it works:**
+- When occupancy **transitions from Clear to Occupied**, a delay timer starts
+- The sensor does NOT report "Occupied" immediately
+- After the delay expires, if still occupied, "Occupied" is reported
+- If occupancy clears during the delay window, the "Occupied" report is cancelled (never sent)
+- When occupancy **clears**, the Clear report is governed by the cooldown (see above)
+
+**Typical values:**
+- `0 ms`: Immediate reporting, no debouncing
+- `250 ms` (default): Filters out brief ghost detections while remaining responsive
+- `500–1000 ms`: Transit areas where you want to confirm presence before triggering
+
+**Example:** With a 250 ms delay:
+1. Sensor briefly detects a target (hand wave) → Delay starts
+2. Target disappears within 250 ms → "Occupied" is never reported
+3. Person enters room and stays → After 250 ms, reports "Occupied"
+4. Person leaves → Cooldown governs when "Clear" is reported
+
+**Configuration per endpoint:**
+Each of the 11 endpoints (main + 10 zones) has its own independent delay value. This allows tuning per area:
+- **Entry zones**: 250 ms (filter brief pass-through detections)
+- **Seated areas**: 500 ms (require sustained presence before triggering)
+- **Transit zones**: 0 ms (react immediately to any detection)
 
 ## Examples
 
