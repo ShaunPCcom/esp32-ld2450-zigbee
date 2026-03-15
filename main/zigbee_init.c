@@ -163,7 +163,21 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
     static uint16_t s_zone_cool[10] = {0};
     static uint16_t s_zone_delay[10] = {250, 250, 250, 250, 250, 250, 250, 250, 250, 250};
 
-    memset(s_zone_csv, 0, sizeof(s_zone_csv));
+    /* Pre-populate from NVS so attributes are valid at registration time.
+     * Registering with an empty CHAR_STRING buffer causes set_attribute_val to
+     * produce garbled data on the first Z2M interview (root cause of NaN coords
+     * after OTA).  Each s_zone_csv[n] is a ZCL CHAR_STRING: [len][data...]. */
+    {
+        nvs_config_t cfg;
+        nvs_config_get(&cfg);
+        for (int n = 0; n < 10; n++) {
+            char tmp[ZB_ZONE_COORDS_MAX_LEN - 1];
+            zone_to_csv(&cfg.zones[n], tmp, sizeof(tmp));
+            size_t slen = strlen(tmp);
+            s_zone_csv[n][0] = (uint8_t)slen;
+            memcpy(s_zone_csv[n] + 1, tmp, slen);
+        }
+    }
     for (int n = 0; n < 10; n++) {
         esp_zb_custom_cluster_add_custom_attr(custom,
             ZB_ATTR_ZONE_VERTEX_COUNT(n),
