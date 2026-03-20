@@ -1,175 +1,211 @@
-# Coordinator Fallback — Setup and Configuration Guide
+# Coordinator Fallback — Setup Guide
 
-The coordinator fallback system allows LD2450-ZB-H2 sensors to continue
-controlling lights autonomously when the Zigbee coordinator (Z2M) or Home
-Assistant is temporarily unreachable, while avoiding false triggers from
-normal network jitter.
+When your Zigbee coordinator (Z2M) or Home Assistant goes down, your lights
+normally stop responding to presence. The coordinator fallback system lets
+LD2450-ZB-H2 sensors keep controlling lights on their own until things recover.
 
----
-
-## How It Works
-
-### Two-Tier Soft/Hard Model
-
-**Soft fallback** — per-endpoint, automatic recovery:
-- A single endpoint's APS ACK times out (>2 s by default)
-- The sensor immediately sends On/Off directly to its bound light via Zigbee binding
-- If any subsequent ACK from the coordinator arrives, all soft fallbacks clear globally
-- HA reconciles light state via its automations — no Off command is sent by the firmware
-- The `soft_fault` attribute increments so HA can observe and react (e.g. suppress
-  occupant count updates during transient jitter)
-
-**Hard fallback** — global, sticky:
-- No ACK arrives from any source within `hard_timeout_sec` seconds (default 10 s)
-  after the first soft fault
-- The sensor enters hard fallback and controls all bound endpoints directly
-- Sticky and NVS-backed — survives reboots
-- Only cleared by HA writing `fallback_mode = false` (handled automatically by the blueprint)
-
-**Heartbeat watchdog** — software death detection:
-- HA sends a periodic "ping" write to the sensor every minute via the blueprint automation
-- If no ping arrives within `heartbeat_interval × 2` seconds (default 240 s), the
-  sensor enters **hard fallback directly** (no soft phase) — coordinator software is dead
-- Covers scenarios where the Zigbee radio (dongle) is still ACKing but HA/Z2M has crashed
-
-### Why Two Tiers?
-
-A single transient APS delay (e.g. 3050 ms due to APS retry) used to cause
-immediate sticky hard fallback and dispatch On/Off to bound lights.
-The soft tier absorbs these transients: the soft fallback fires, the correct
-light turns on, the delayed ACK arrives ~1 s later, soft fallback clears, HA
-reconciles. ~1 s disruption, no user-visible effect. Hard fallback only
-activates when the coordinator is genuinely unreachable.
+It uses a two-tier approach to avoid false triggers from normal network hiccups
+while still providing reliable control during real outages.
 
 ---
 
-## Prerequisites
+## What Problem Does This Solve?
 
-1. **Zigbee bindings** configured for each endpoint/zone that should control a
-   light in fallback. Without a binding, the sensor has nowhere to send On/Off.
-   Configure bindings in Z2M under **Device → Bind**.
+Zigbee presence sensors normally report occupancy to Home Assistant, which then
+controls your lights via automations. If HA or Z2M goes offline — even for a
+few seconds — your lights stop responding.
 
-2. **Z2M external converter** (`ld2450_zb_h2.js`) installed and Z2M restarted.
+The fallback system handles two scenarios:
 
-3. **HA blueprint** installed at
-   `/config/blueprints/automation/ld2450/ld2450_fallback_watchdog.yaml`.
+**Brief network hiccup** (soft fallback): The sensor notices a delayed response
+from the coordinator. It immediately turns on the bound light directly, then
+the coordinator catches up a second later and everything returns to normal
+automatically. You might not even notice it happened.
+
+**Real outage** (hard fallback): The coordinator is genuinely gone. After a
+configurable timeout (default 10 s), the sensor takes over completely — turning
+lights on and off based on presence until HA explicitly tells it to stop. This
+survives reboots.
+
+**HA software crash** (heartbeat watchdog): HA sends a periodic "ping" to each
+sensor. If the pings stop arriving (because HA crashed but the Zigbee dongle is
+still powered), the sensor enters hard fallback. Covers the case where the radio
+is fine but the software is dead.
 
 ---
 
-## Device Setup (per sensor, via Z2M)
+## What Are Zigbee Bindings?
+
+A Zigbee binding is a direct link between your sensor and a light, configured
+in Z2M. It lets the sensor send On/Off commands straight to the light without
+going through Home Assistant.
+
+**Without a binding**, the sensor has nowhere to send commands during fallback —
+it's like having a light switch that isn't wired to anything. Bindings are what
+make fallback work.
+
+### How to set up bindings
+
+1. Open your sensor's device page in Z2M
+2. Go to the **Bind** tab
+3. For each endpoint (main sensor or zone) that covers an area with a light:
+   - Select the endpoint as the **source**
+   - Select the light as the **target**
+   - Bind the **On/Off** cluster
+
+### Which endpoints to bind
+
+- **Main endpoint (EP1)**: Bind to the primary light for the sensor's overall
+  coverage area
+- **Zone endpoints**: Bind each zone to the light that covers that zone's
+  physical area — zone 1 might bind to the kitchen light, zone 6 might bind to
+  the bathroom light, even if the sensor is mounted in the kitchen
+
+You don't need to bind every endpoint. Zones without bindings simply won't
+control any light during fallback (which is fine — they just have nothing to do).
+
+---
+
+## Setup
+
+### Step 1: Configure bindings
+
+Set up Zigbee bindings as described above.
+
+### Step 2: Install the Z2M external converter
+
+Copy `z2m/ld2450_zb_h2.js` to your Z2M `external_converters/` directory and
+restart Z2M.
+
+### Step 3: Enable fallback on each sensor (via Z2M)
+
+Open the sensor's device page in Z2M and set:
 
 | Setting | Recommended value | Description |
 |---------|-------------------|-------------|
-| `fallback_enable` | `on` | Enables the soft/hard fallback system |
-| `heartbeat_enable` | `on` | Enables software watchdog |
-| `heartbeat_interval` | `120` s | Expected ping interval; watchdog fires at 2× this |
-| `hard_timeout_sec` | `10` s | Time from first soft fault to hard fallback escalation |
-| `ack_timeout_ms` | `2000` ms | APS ACK timeout before soft fallback fires |
-| `fallback_cooldown` | tune per zone | How long to keep light on after Clear in fallback |
+| `fallback_enable` | ON | Activates the fallback system |
+| `heartbeat_enable` | ON | Activates the software watchdog |
+| `heartbeat_interval` | `120` s | How often the sensor expects a ping (watchdog fires at 2x this) |
+| `hard_timeout_sec` | `10` s | Seconds before a brief hiccup escalates to full fallback |
+| `ack_timeout_ms` | `2000` ms | How long to wait for a coordinator response |
+| `fallback_cooldown` | per zone | How long to keep the light on after presence clears during fallback |
 
-### Tuning `ack_timeout_ms`
+All settings are in the **Exposes** tab of the Z2M device page.
 
-The default 2000 ms is intentionally aggressive to give fast light response.
-If you see frequent soft faults (`soft_fault` incrementing often) on a busy
-network, increase to 3000–5000 ms. Data point: APS retries typically resolve
-within ~1 s, so 3000 ms is a safe conservative value.
+### Step 4: Install the HA blueprint
 
-### Tuning `hard_timeout_sec`
+Copy `ha/blueprints/ld2450_fallback_watchdog.yaml` to your HA instance at:
 
-10 s default gives a 2–12 s window from coordinator loss to hard fallback
-activation. Increase to 20–30 s on networks with occasional multi-second
-APS delays to reduce hard fallback entries.
+```
+/config/blueprints/automation/ld2450/ld2450_fallback_watchdog.yaml
+```
 
-### Fallback cooldown
+You can copy the file using the **File Editor** addon, **Studio Code Server**
+addon, **Samba** share, or **SSH**.
 
-`fallback_cooldown` (main EP) and `fallback_cooldown_zone_N` (per zone)
-control how long the sensor keeps the light on after an Unoccupied report
-arrives while in hard fallback. Default 300 s (5 min) keeps lights on
-conservatively — tune to your use case.
+Then go to **Settings → Automations → Blueprints** and click the reload button.
 
----
+### Step 5: Create the automation
 
-## Blueprint Setup
+Click **LD2450 Coordinator Fallback Watchdog → Create Automation** and configure:
 
-### Installation
-
-1. Copy `ha/blueprints/ld2450_fallback_watchdog.yaml` to
-   `/config/blueprints/automation/ld2450/ld2450_fallback_watchdog.yaml` on
-   your HA instance.
-2. Go to **Settings → Automations → Blueprints** and reload blueprints.
-3. Click **LD2450 Coordinator Fallback Watchdog → Create Automation**.
-
-### Inputs
+**LD2450 Sensors** — Select the **main occupancy entity** for each sensor. This
+is the one named `binary_sensor.<device_name>_occupancy` (without a zone number).
+Do not select zone occupancy entities — the fallback attributes (`soft_fault`,
+`fallback_mode`) only exist on the main entity.
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| **LD2450 Sensors** | — | Select the **main occupancy entity** for each sensor (e.g. `binary_sensor.kitchen_sensor_occupancy`). Use the main EP entity, not zone entities. |
-| **Z2M bridge entity** | `binary_sensor.zigbee2mqtt_bridge_connection_state` | Z2M bridge connectivity sensor. Used to detect Z2M restarts. |
-| **Recovery delay** | 60 s | Wait after HA startup before clearing hard fallback (gives Z2M time to reconnect). |
-| **Multi-sensor re-check delay** | 30 s | If only one sensor enters hard fallback while others are normal, wait this long before clearing. Guards against a single sensor failure vs a real outage. |
-| **Notify on soft fault** | off | Send a persistent HA notification on each soft fault. Useful for monitoring network jitter during initial deployment. |
-
-### Which entity to select
-
-Select the **main occupancy sensor** for each physical device — the one that
-corresponds to EP1 (not zone 1–10 occupancy entities). The `soft_fault` and
-`fallback_mode` attributes live on EP1 and are only present on the main entity.
-
-In HA, this is typically named `binary_sensor.<device_name>_occupancy` (without
-a zone number suffix).
+| **LD2450 Sensors** | — | Main occupancy entity per sensor (see above) |
+| **Z2M bridge entity** | `binary_sensor.zigbee2mqtt_bridge_connection_state` | Tracks Z2M connectivity for restart recovery |
+| **Recovery delay** | 60 s | Wait after HA startup before clearing fallback |
+| **Multi-sensor re-check delay** | 30 s | Wait before clearing if only one sensor entered fallback |
+| **Notify on soft fault** | off | Persistent notification on network hiccups (useful during initial deployment) |
 
 ---
 
 ## Recovery Behaviour
 
-The blueprint handles three recovery scenarios automatically:
+The blueprint automatically clears hard fallback in all three outage scenarios:
 
-| Scenario | Trigger | Delay | Action |
-|----------|---------|-------|--------|
-| Coordinator goes down while HA is running | `hard_fallback_detected` (live state change) | 30 s re-check | Writes `fallback_mode=false` |
-| Z2M restarts (HA stays up) | `z2m_reconnect` (bridge entity → on) | 15 s | Checks and clears if in hard fallback |
-| HA server reboots | `ha_start` (HA startup event) | 60 s | Checks and clears if in hard fallback |
+| Scenario | What happens | Delay |
+|----------|-------------|-------|
+| Coordinator goes down while HA is running | Blueprint sees `fallback_mode` turn on, waits, then clears it | 30 s |
+| Z2M restarts (HA stays up) | Blueprint detects Z2M bridge reconnection, checks and clears | 15 s |
+| HA server reboots | Blueprint runs on HA startup, checks and clears | 60 s |
 
-The delays ensure Z2M and HA automations have time to fully initialise before
-the blueprint takes action.
+The delays give Z2M and HA time to fully start up before the blueprint takes action.
 
 ---
 
 ## Monitoring
 
-### `soft_fault` attribute
+Both attributes are visible in the Z2M device page under the **Exposes** tab.
 
-Increments each time a soft fallback fires. Firmware resets it to 0 when the
-coordinator ACKs. Observable in Z2M and HA.
+### `soft_fault` — network hiccup counter
 
-- Occasional soft faults (a few per day): normal on a busy network
-- Frequent soft faults (multiple per hour): consider increasing `ack_timeout_ms`
-- Soft fault immediately followed by `fallback_mode=true`: coordinator genuinely went down
+Increments each time a soft fallback fires. Resets to 0 automatically when
+the coordinator responds.
 
-### `fallback_mode` attribute
+- **A few per day**: Normal on a busy Zigbee network
+- **Multiple per hour**: Your network is congested — increase `ack_timeout_ms`
+  to 3000–5000 ms
+- **Immediately followed by `fallback_mode` turning on**: The coordinator
+  genuinely went down
 
-`false` = normal operation. `true` = hard fallback active. The blueprint clears
-this automatically on recovery. If it stays `true` after Z2M and HA are back,
-write `false` manually via Z2M or the CLI (`ld fallback clear`).
+### `fallback_mode` — hard fallback status
+
+`false` = normal operation. `true` = hard fallback active.
+
+The blueprint clears this automatically on recovery. If it stays `true` after
+Z2M and HA are both back and running, clear it manually in Z2M or via the
+CLI (`ld fallback clear`).
+
+---
+
+## Tuning
+
+### `ack_timeout_ms` (default: 2000 ms)
+
+How long the sensor waits for a coordinator response before triggering soft
+fallback. The default 2000 ms is aggressive — it prioritises fast light
+response over avoiding soft faults. Increase to 3000–5000 ms if you see
+frequent soft faults. Zigbee retries typically resolve within ~1 s, so 3000 ms
+is a good conservative starting point.
+
+### `hard_timeout_sec` (default: 10 s)
+
+How long after the first soft fault before escalating to hard fallback. The
+default gives a 2–12 s window from coordinator loss to full fallback activation.
+Increase to 20–30 s on networks with occasional multi-second delays.
+
+### `fallback_cooldown` (default: 300 s)
+
+How long the sensor keeps the light on after presence clears during hard
+fallback. Per-zone cooldowns (`fallback_cooldown_zone_N`) are also available.
+Default 5 minutes keeps lights on conservatively — adjust based on how quickly
+you want lights to turn off when a room empties during an outage.
 
 ---
 
 ## Limitations
 
-**Bindings are direct On/Off only.** Fallback cannot replicate HA automation
-logic beyond a simple on/off switch — brightness levels, colour temperature,
-time-of-day conditions, and similar behaviours are HA's responsibility and
-resume automatically once the coordinator recovers.
+**Fallback can only send On/Off commands.** Brightness levels, colour
+temperature, time-of-day conditions, and similar logic are HA's responsibility
+and resume automatically once the coordinator recovers.
 
 ---
 
 ## CLI Reference
 
+These commands are for direct hardware access via a USB serial terminal.
+They are not needed for normal setup — all settings are configurable via Z2M.
+
 ```
-ld fallback              — Show fallback status (hard mode, enable, soft faults, timeouts)
-ld fallback clear        — Clear hard fallback (equivalent to writing fallback_mode=false)
-ld fallback enable 1     — Enable soft/hard fallback system
-ld fallback enable 0     — Disable (pure HA mode, no APS probing)
-ld fallback timeout 10   — Set hard_timeout_sec (seconds soft→hard escalation)
-ld fallback ack-timeout 2000  — Set ack_timeout_ms (APS ACK timeout)
+ld fallback              Show fallback status
+ld fallback clear        Clear hard fallback
+ld fallback enable 1     Enable the fallback system
+ld fallback enable 0     Disable (pure HA mode)
+ld fallback timeout 10   Set hard_timeout_sec
+ld fallback ack-timeout 2000  Set ack_timeout_ms
 ```
