@@ -513,7 +513,7 @@ const definition = {
     /* DEV identifier: matches dev/coordinator-fallback branch firmware.
      * Revert to 'LD2450-H2' and 'LD2450-ZB-H2' before merging to master. */
     zigbeeModel: ['LD2450-H2-DEV'],
-    model: 'LD2450-ZB-H2-DEV',
+    model: 'LD2450-H2-DEV',
     vendor: 'LD2450Z',
     description: 'HLK-LD2450 mmWave presence sensor (Zigbee, ESP32-H2)',
     fromZigbee: [fzLocal.occupancy, fzLocal.config],

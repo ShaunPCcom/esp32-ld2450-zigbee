@@ -20,7 +20,8 @@ blueprint:
     **Setup:**
     1. Enable `fallback_enable` on each sensor via Z2M or HA.
     2. Optionally enable `heartbeat_enable` and set `heartbeat_interval` on
-       each sensor to match the interval configured below.
+       each sensor (default 120 s). This blueprint pings every minute, so the
+       watchdog fires only if HA itself is down for longer than 2 × interval.
     3. Install this blueprint and select your LD2450 sensors.
 
     **What this automation does:**
@@ -32,6 +33,9 @@ blueprint:
       to resume control of lights.
     - Multi-sensor guard: if only one sensor enters hard fallback while others
       remain normal, waits a re-check delay before deciding it's a real outage.
+    - Clears hard fallback after Z2M reconnects (covers Z2M-only restarts where
+      HA missed the fallback_mode transition while Z2M was offline).
+    - Clears hard fallback after HA restarts (covers full server reboots).
 
   domain: automation
   author: LD2450-ZB-H2
@@ -46,19 +50,6 @@ blueprint:
             - integration: mqtt
               device_class: occupancy
 
-    heartbeat_interval:
-      name: Heartbeat interval (minutes)
-      description: >
-        How often to send the heartbeat ping. Must be ≤ half the
-        `heartbeat_interval` configured on each sensor (in seconds).
-        Example: sensor interval = 120 s → set this to 1 minute.
-      default: 1
-      selector:
-        number:
-          min: 1
-          max: 30
-          unit_of_measurement: min
-          step: 1
 
     recovery_delay:
       name: Recovery delay (seconds)
@@ -88,6 +79,17 @@ blueprint:
           unit_of_measurement: s
           step: 5
 
+    z2m_bridge_entity:
+      name: Zigbee2MQTT bridge connection entity
+      description: >
+        The binary sensor that tracks Z2M bridge connectivity. Used to detect
+        Z2M restarts and re-check hard fallback state after reconnection.
+        Default matches the standard Z2M HA integration entity name.
+      default: binary_sensor.zigbee2mqtt_bridge_connection_state
+      selector:
+        entity:
+          domain: binary_sensor
+
     notify_on_soft_fault:
       name: Notify on soft fault
       description: >
@@ -101,9 +103,9 @@ mode: parallel
 max: 10
 
 trigger:
-  # Periodic heartbeat
+  # Periodic heartbeat — every minute (device-side heartbeat_interval controls watchdog timeout)
   - platform: time_pattern
-    minutes: !input heartbeat_interval
+    minutes: "/1"
     id: heartbeat
 
   # Soft fault counter changed on any watched sensor
@@ -118,6 +120,12 @@ trigger:
     attribute: fallback_mode
     to: true
     id: hard_fallback_detected
+
+  # Z2M reconnect — re-check hard fallback after Z2M comes back online
+  - platform: state
+    entity_id: !input z2m_bridge_entity
+    to: "on"
+    id: z2m_reconnect
 
   # HA startup — clear hard fallback after recovery delay
   - platform: homeassistant
@@ -138,7 +146,7 @@ action:
                 - service: mqtt.publish
                   data:
                     topic: >-
-                      zigbee2mqtt/{{ state_attr(repeat.item, 'friendly_name') }}/set
+                      zigbee2mqtt/{{ device_attr(device_id(repeat.item), 'name') }}/set
                     payload: '{"heartbeat": "ping"}'
 
       # ---- Soft fault notification ----
@@ -172,8 +180,28 @@ action:
           - service: mqtt.publish
             data:
               topic: >-
-                zigbee2mqtt/{{ state_attr(trigger.entity_id, 'friendly_name') }}/set
+                zigbee2mqtt/{{ device_attr(device_id(trigger.entity_id), 'name') }}/set
               payload: '{"fallback_mode": false}'
+
+      # ---- Z2M reconnect recovery ----
+      - conditions:
+          - condition: trigger
+            id: z2m_reconnect
+        sequence:
+          # Give Z2M time to re-read device states before checking
+          - delay:
+              seconds: 15
+          - repeat:
+              for_each: !input sensors
+              sequence:
+                - condition: template
+                  value_template: >-
+                    {{ state_attr(repeat.item, 'fallback_mode') == true }}
+                - service: mqtt.publish
+                  data:
+                    topic: >-
+                      zigbee2mqtt/{{ device_attr(device_id(repeat.item), 'name') }}/set
+                    payload: '{"fallback_mode": false}'
 
       # ---- HA startup recovery ----
       - conditions:
@@ -192,5 +220,5 @@ action:
                 - service: mqtt.publish
                   data:
                     topic: >-
-                      zigbee2mqtt/{{ state_attr(repeat.item, 'friendly_name') }}/set
+                      zigbee2mqtt/{{ device_attr(device_id(repeat.item), 'name') }}/set
                     payload: '{"fallback_mode": false}'
