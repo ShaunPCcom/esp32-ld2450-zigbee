@@ -17,6 +17,7 @@ The LD2450 is a 24GHz mmWave radar sensor that tracks up to 3 targets simultaneo
 - **Zigbee2MQTT integration**: 71 Home Assistant entities via external converter
 - **OTA firmware updates**: Remote updates via Zigbee2MQTT (dual partition rollback protection)
 - **Crash diagnostic telemetry**: Remote debugging via boot_count, reset_reason, last_uptime, and min_free_heap sensors
+- **Coordinator fallback**: Soft/hard two-tier fallback keeps lights working during coordinator or HA outages via Zigbee binding dispatch and a heartbeat watchdog
 - **NVS persistence**: All configuration survives reboots (independent of coordinator)
 - **Serial CLI**: Configure zones, tracking mode, distance/angle limits over UART
 - **LED status indicator**: WS2812 RGB shows connection state
@@ -369,6 +370,16 @@ Each of the 11 endpoints (main + 10 zones) has its own independent delay value. 
 - **Entry zones**: 250 ms (filter brief pass-through detections)
 - **Seated areas**: 500 ms (require sustained presence before triggering)
 - **Transit zones**: 0 ms (react immediately to any detection)
+
+## Coordinator Fallback
+
+The sensor includes a soft/hard two-tier fallback system that keeps lights working
+when the coordinator (Z2M) or Home Assistant is temporarily unreachable. A heartbeat
+watchdog detects HA software death even when the Zigbee radio is still responsive.
+
+See [docs/coordinator-fallback.md](docs/coordinator-fallback.md) for full setup
+instructions including device settings, blueprint configuration, recovery behaviour,
+and tuning guidance.
 
 ## Examples
 
