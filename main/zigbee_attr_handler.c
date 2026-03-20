@@ -125,6 +125,35 @@ static esp_err_t handle_set_attr_value(const esp_zb_zcl_set_attr_value_message_t
             ESP_LOGI(TAG, "Fallback cooldown (main) -> %u sec%s", sec, (err == ESP_OK) ? " (saved)" : " (NVS FAILED)");
             return ESP_OK;
         }
+        case ZB_ATTR_HEARTBEAT_ENABLE: {
+            uint8_t enable = *(uint8_t *)val;
+            coordinator_fallback_set_heartbeat_enable(enable);
+            return ESP_OK;
+        }
+        case ZB_ATTR_HEARTBEAT_INTERVAL: {
+            uint16_t sec = *(uint16_t *)val;
+            coordinator_fallback_set_heartbeat_interval(sec);
+            return ESP_OK;
+        }
+        case ZB_ATTR_HEARTBEAT:
+            coordinator_fallback_heartbeat();
+            return ESP_OK;
+        case ZB_ATTR_FALLBACK_ENABLE: {
+            uint8_t enable = *(uint8_t *)val;
+            coordinator_fallback_set_enable(enable);
+            ESP_LOGI(TAG, "Fallback enable -> %u", enable);
+            return ESP_OK;
+        }
+        case ZB_ATTR_HARD_TIMEOUT_SEC: {
+            uint8_t sec = *(uint8_t *)val;
+            coordinator_fallback_set_hard_timeout(sec);
+            return ESP_OK;
+        }
+        case ZB_ATTR_ACK_TIMEOUT_MS: {
+            uint16_t ms = *(uint16_t *)val;
+            coordinator_fallback_set_ack_timeout(ms);
+            return ESP_OK;
+        }
         case ZB_ATTR_RESTART:
             zgb_ctrl_handle_restart();
             return ESP_OK;

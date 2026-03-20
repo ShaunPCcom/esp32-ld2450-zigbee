@@ -212,6 +212,61 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
         ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
         &init_fallback_mode);
 
+    /* Heartbeat watchdog attributes (0x0026-0x0028) */
+    static uint8_t  s_hb_enable   = 0;
+    static uint16_t s_hb_interval = 120;
+    static uint8_t  s_hb_write    = 0;
+    {
+        nvs_config_t hb_cfg;
+        nvs_config_get(&hb_cfg);
+        s_hb_enable   = hb_cfg.heartbeat_enable;
+        s_hb_interval = hb_cfg.heartbeat_interval_sec;
+    }
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_HEARTBEAT_ENABLE,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+        &s_hb_enable);
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_HEARTBEAT_INTERVAL,
+        ESP_ZB_ZCL_ATTR_TYPE_U16,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+        &s_hb_interval);
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_HEARTBEAT,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_WRITE_ONLY,
+        &s_hb_write);
+
+    /* Soft/hard two-tier fallback attributes (0x0029-0x002C) */
+    static uint8_t  s_fb_enable     = 0;
+    static uint8_t  s_fb_zero_u8    = 0;   /* soft_fault initial value = 0 */
+    static uint8_t  s_hard_to_sec   = 10;
+    static uint16_t s_ack_to_ms     = 2000;
+    {
+        nvs_config_t tier_cfg;
+        nvs_config_get(&tier_cfg);
+        s_fb_enable   = tier_cfg.fallback_enable;
+        s_hard_to_sec = tier_cfg.hard_timeout_sec;
+        if (s_hard_to_sec == 0) s_hard_to_sec = 10;
+        s_ack_to_ms   = tier_cfg.ack_timeout_ms;
+        if (s_ack_to_ms == 0) s_ack_to_ms = 2000;
+    }
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_FALLBACK_ENABLE,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+        &s_fb_enable);
+    /* soft_fault: R+Report, firmware-only write; HA observes changes */
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_SOFT_FAULT,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
+        &s_fb_zero_u8);
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_HARD_TIMEOUT_SEC,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+        &s_hard_to_sec);
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_ACK_TIMEOUT_MS,
+        ESP_ZB_ZCL_ATTR_TYPE_U16,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+        &s_ack_to_ms);
+
     /* Fallback cooldown attributes (0x0025 = main, 0x0070-0x0079 = zones) */
     static uint16_t s_fb_cool_main = 300;
     static uint16_t s_fb_cool_zone[10] = {300, 300, 300, 300, 300, 300, 300, 300, 300, 300};

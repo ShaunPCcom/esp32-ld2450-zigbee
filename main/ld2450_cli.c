@@ -57,8 +57,11 @@ static void print_help(void)
         "  ld delay zone <1-10> <ms>     (set zone delay)\n"
         "  ld delay all <milliseconds>  (set all endpoints)\n"
         "  ld fallback                  (show fallback state)\n"
-        "  ld fallback on               (force enter fallback mode)\n"
-        "  ld fallback off              (clear fallback mode)\n"
+        "  ld fallback on               (force enter hard fallback)\n"
+        "  ld fallback off              (clear hard fallback)\n"
+        "  ld fallback enable [0|1]     (get/set global fallback enable)\n"
+        "  ld fallback timeout [sec]    (get/set hard timeout, default 10s)\n"
+        "  ld fallback ack-timeout [ms] (get/set ACK timeout, default 2000ms)\n"
         "  ld fallback cooldown         (show all 11 fallback cooldowns)\n"
         "  ld fallback cooldown <sec>   (set main fallback cooldown)\n"
         "  ld fallback cooldown zone <1-10> <sec>\n"
@@ -415,9 +418,15 @@ static void cli_task(void *arg)
             if (strcmp(cmd, "fallback") == 0) {
                 char *sub = strtok(NULL, " \t\r\n");
                 if (!sub) {
-                    /* Show current state */
                     bool active = coordinator_fallback_is_active();
-                    printf("fallback: %s\n", active ? "ACTIVE" : "normal");
+                    nvs_config_t cfg;
+                    nvs_config_get(&cfg);
+                    printf("fallback: hard=%s enable=%u soft_faults=%u ack_to=%ums hard_to=%us\n",
+                           active ? "ACTIVE" : "normal",
+                           cfg.fallback_enable,
+                           coordinator_fallback_get_soft_fault_count(),
+                           cfg.ack_timeout_ms,
+                           cfg.hard_timeout_sec);
                     continue;
                 }
 
@@ -431,6 +440,51 @@ static void cli_task(void *arg)
                 if (strcmp(sub, "off") == 0) {
                     coordinator_fallback_clear();
                     printf("fallback: cleared (saved)\n");
+                    continue;
+                }
+
+                if (strcmp(sub, "enable") == 0) {
+                    char *val_str = strtok(NULL, " \t\r\n");
+                    if (!val_str) {
+                        nvs_config_t cfg;
+                        if (nvs_config_get(&cfg) == ESP_OK) {
+                            printf("fallback enable: %u\n", cfg.fallback_enable);
+                        }
+                    } else {
+                        uint8_t en = (uint8_t)atoi(val_str);
+                        coordinator_fallback_set_enable(en);
+                        printf("fallback enable -> %u (saved)\n", en);
+                    }
+                    continue;
+                }
+
+                if (strcmp(sub, "timeout") == 0) {
+                    char *val_str = strtok(NULL, " \t\r\n");
+                    if (!val_str) {
+                        nvs_config_t cfg;
+                        if (nvs_config_get(&cfg) == ESP_OK) {
+                            printf("fallback hard timeout: %u sec\n", cfg.hard_timeout_sec);
+                        }
+                    } else {
+                        uint8_t sec = (uint8_t)atoi(val_str);
+                        coordinator_fallback_set_hard_timeout(sec);
+                        printf("fallback hard timeout -> %u sec (saved)\n", sec);
+                    }
+                    continue;
+                }
+
+                if (strcmp(sub, "ack-timeout") == 0) {
+                    char *val_str = strtok(NULL, " \t\r\n");
+                    if (!val_str) {
+                        nvs_config_t cfg;
+                        if (nvs_config_get(&cfg) == ESP_OK) {
+                            printf("fallback ack timeout: %u ms\n", cfg.ack_timeout_ms);
+                        }
+                    } else {
+                        uint16_t ms = (uint16_t)atoi(val_str);
+                        coordinator_fallback_set_ack_timeout(ms);
+                        printf("fallback ack timeout -> %u ms (saved)\n", ms);
+                    }
                     continue;
                 }
 
@@ -490,7 +544,7 @@ static void cli_task(void *arg)
                     continue;
                 }
 
-                printf("usage: ld fallback [on|off|cooldown ...]\n");
+                printf("usage: ld fallback [on|off|enable|timeout|ack-timeout|cooldown ...]\n");
                 continue;
             }
 

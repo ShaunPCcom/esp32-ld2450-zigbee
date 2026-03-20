@@ -59,3 +59,47 @@ void coordinator_fallback_clear(void);
  * Normal operation: firmware sets this internally via ACK timeout.
  */
 void coordinator_fallback_set(void);
+
+/**
+ * Software watchdog (heartbeat) API.
+ *
+ * When heartbeat_enable=1, the firmware expects periodic writes to the
+ * heartbeat attribute from the coordinator application (e.g. an HA automation
+ * blueprint).  If no heartbeat arrives within interval×2 seconds, the device
+ * enters fallback mode — indicating the coordinator software is down even
+ * though the radio hardware (dongle) is still ACKing at the APS layer.
+ *
+ * This is opt-in.  With heartbeat_enable=0 (default), only hardware failures
+ * trigger fallback via the APS ACK probe mechanism.
+ */
+
+/** Called when the heartbeat attribute is written.  Resets the watchdog. */
+void coordinator_fallback_heartbeat(void);
+
+/** Enable or disable the software watchdog.  Persists to NVS. */
+void coordinator_fallback_set_heartbeat_enable(uint8_t enable);
+
+/** Set the expected heartbeat interval.  Watchdog timeout = interval × 2.  Persists to NVS. */
+void coordinator_fallback_set_heartbeat_interval(uint16_t interval_sec);
+
+/**
+ * Soft/hard two-tier fallback control.
+ *
+ * fallback_enable=0 (default): probing disabled, pure HA mode.
+ *   An existing hard fallback still persists until HA clears it.
+ * fallback_enable=1: full soft/hard cycle active.
+ *   APS ACK timeout → soft fallback (per-EP, auto-recovering on next ACK).
+ *   No ACK within hard_timeout_sec → hard fallback (sticky, NVS-backed).
+ */
+
+/** Enable or disable the entire soft/hard fallback system.  Persists to NVS. */
+void coordinator_fallback_set_enable(uint8_t enable);
+
+/** Set the hard timeout (seconds from first soft fault → hard fallback).  Persists to NVS. */
+void coordinator_fallback_set_hard_timeout(uint8_t sec);
+
+/** Set the APS ACK timeout in ms.  Persists to NVS. */
+void coordinator_fallback_set_ack_timeout(uint16_t ms);
+
+/** Return the current soft fault count (read-only; firmware clears on coordinator ACK). */
+uint8_t coordinator_fallback_get_soft_fault_count(void);

@@ -343,6 +343,9 @@ static void configure_all_reporting(void)
     configure_reporting_for_diag_attr(ZB_ATTR_LAST_UPTIME_SEC, REPORT_MAX_INTERVAL);
     /* Min free heap: no keepalive, reported only alongside occupancy/sensor changes */
     configure_reporting_for_diag_attr(ZB_ATTR_MIN_FREE_HEAP,   0);
+    /* Fallback mode (hard) and soft fault: report on any change (delta=0) */
+    configure_reporting_for_diag_attr(ZB_ATTR_FALLBACK_MODE,   0);
+    configure_reporting_for_diag_attr(ZB_ATTR_SOFT_FAULT,      0);
     ESP_LOGI(TAG, "Reporting configured for all endpoints");
 }
 

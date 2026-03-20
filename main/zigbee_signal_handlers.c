@@ -10,6 +10,7 @@
 #include "nvs.h"
 
 #include "esp_zigbee_core.h"
+#include "zdo/esp_zigbee_zdo_common.h"
 
 /* Project */
 #include "board_led.h"
@@ -92,6 +93,17 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
         break;
+
+    case ESP_ZB_NLME_STATUS_INDICATION: {
+        esp_zb_zdo_signal_nwk_status_indication_params_t *p =
+            (esp_zb_zdo_signal_nwk_status_indication_params_t *)
+            esp_zb_app_signal_get_params(p_sg_p);
+        if (p) {
+            ESP_LOGW(TAG, "NWK status indication: code=0x%02x addr=0x%04x",
+                     p->status, p->network_addr);
+        }
+        break;
+    }
 
     default:
         ESP_LOGI(TAG, "ZB signal=0x%08" PRIx32 " status=%s",

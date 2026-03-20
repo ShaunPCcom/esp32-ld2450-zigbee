@@ -77,6 +77,11 @@ static const nvs_config_t DEFAULT_CONFIG = {
     .occupancy_delay_ms     = {250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250},
     .fallback_mode          = 0,
     .fallback_cooldown_sec  = {300, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300},
+    .fallback_enable        = 0,
+    .hard_timeout_sec       = 10,
+    .ack_timeout_ms         = 2000,
+    .heartbeat_enable       = 0,
+    .heartbeat_interval_sec = 120,
 };
 
 static esp_err_t nvs_save_u8(const char *key, uint8_t val)
@@ -220,6 +225,16 @@ esp_err_t nvs_config_init(void)
 
     /* Load fallback_mode */
     nvs_get_u8(h, "fb_mode", &s_cfg.fallback_mode);
+    nvs_get_u8(h, "hb_enable", &s_cfg.heartbeat_enable);
+    nvs_get_u16(h, "hb_interval", &s_cfg.heartbeat_interval_sec);
+    if (s_cfg.heartbeat_interval_sec == 0) s_cfg.heartbeat_interval_sec = 120;
+
+    /* Load soft/hard fallback parameters */
+    nvs_get_u8(h, "fb_enable", &s_cfg.fallback_enable);
+    nvs_get_u8(h, "hard_to_sec", &s_cfg.hard_timeout_sec);
+    if (s_cfg.hard_timeout_sec == 0) s_cfg.hard_timeout_sec = 10;
+    nvs_get_u16(h, "ack_to_ms", &s_cfg.ack_timeout_ms);
+    if (s_cfg.ack_timeout_ms == 0) s_cfg.ack_timeout_ms = 2000;
 
     /* Load fallback cooldowns — versioned blob: { version(1), reserved(1), cooldowns[11] } */
     {
@@ -326,6 +341,19 @@ esp_err_t nvs_config_save_fallback_mode(uint8_t mode)
     return nvs_save_u8("fb_mode", mode);
 }
 
+esp_err_t nvs_config_save_heartbeat_enable(uint8_t enable)
+{
+    s_cfg.heartbeat_enable = enable;
+    return nvs_save_u8("hb_enable", enable);
+}
+
+esp_err_t nvs_config_save_heartbeat_interval(uint16_t sec)
+{
+    if (sec == 0) sec = 120;
+    s_cfg.heartbeat_interval_sec = sec;
+    return nvs_save_u16("hb_interval", sec);
+}
+
 esp_err_t nvs_config_save_fallback_cooldown(uint8_t endpoint_index, uint16_t sec)
 {
     if (endpoint_index >= 11) return ESP_ERR_INVALID_ARG;
@@ -337,4 +365,24 @@ esp_err_t nvs_config_save_fallback_cooldown(uint8_t endpoint_index, uint16_t sec
     fb_cool_blob_t blob = { .version = 1, .reserved = 0 };
     memcpy(blob.cooldowns, s_cfg.fallback_cooldown_sec, sizeof(s_cfg.fallback_cooldown_sec));
     return nvs_save_blob("fb_cool", &blob, sizeof(blob));
+}
+
+esp_err_t nvs_config_save_fallback_enable(uint8_t enable)
+{
+    s_cfg.fallback_enable = enable;
+    return nvs_save_u8("fb_enable", enable);
+}
+
+esp_err_t nvs_config_save_hard_timeout_sec(uint8_t sec)
+{
+    if (sec == 0) sec = 10;
+    s_cfg.hard_timeout_sec = sec;
+    return nvs_save_u8("hard_to_sec", sec);
+}
+
+esp_err_t nvs_config_save_ack_timeout_ms(uint16_t ms)
+{
+    if (ms < 500) ms = 500;
+    s_cfg.ack_timeout_ms = ms;
+    return nvs_save_u16("ack_to_ms", ms);
 }

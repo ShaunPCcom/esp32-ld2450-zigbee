@@ -52,6 +52,13 @@ const ld2450ConfigCluster = {
         occupancyDelay:       {ID: 0x0023, type: ZCL_UINT16,   write: true},
         fallbackMode:         {ID: 0x0024, type: ZCL_UINT8,    write: true, report: true},
         fallbackCooldown:     {ID: 0x0025, type: ZCL_UINT16,   write: true},
+        heartbeatEnable:      {ID: 0x0026, type: ZCL_UINT8,    write: true},
+        heartbeatInterval:    {ID: 0x0027, type: ZCL_UINT16,   write: true},
+        heartbeat:            {ID: 0x0028, type: ZCL_UINT8,    write: true},
+        fallbackEnable:       {ID: 0x0029, type: ZCL_UINT8,    write: true},
+        softFault:            {ID: 0x002A, type: ZCL_UINT8,    report: true},
+        hardTimeoutSec:       {ID: 0x002B, type: ZCL_UINT8,    write: true},
+        ackTimeoutMs:         {ID: 0x002C, type: ZCL_UINT16,   write: true},
         bootCount:            {ID: 0x0030, type: ZCL_UINT32,   report: false},
         resetReason:          {ID: 0x0031, type: ZCL_UINT8,    report: false},
         lastUptimeSec:        {ID: 0x0032, type: ZCL_UINT32,   report: false},
@@ -139,6 +146,12 @@ const fzLocal = {
             if (d.occupancyDelay !== undefined)     result.occupancy_delay     = d.occupancyDelay;
             if (d.fallbackMode !== undefined)       result.fallback_mode       = d.fallbackMode === 1;
             if (d.fallbackCooldown !== undefined)   result.fallback_cooldown   = d.fallbackCooldown;
+            if (d.fallbackEnable !== undefined)     result.fallback_enable     = d.fallbackEnable === 1;
+            if (d.softFault !== undefined)          result.soft_fault          = d.softFault;
+            if (d.hardTimeoutSec !== undefined)     result.hard_timeout_sec    = d.hardTimeoutSec;
+            if (d.ackTimeoutMs !== undefined)       result.ack_timeout_ms      = d.ackTimeoutMs;
+            if (d.heartbeatEnable !== undefined)    result.heartbeat_enable    = d.heartbeatEnable === 1;
+            if (d.heartbeatInterval !== undefined)  result.heartbeat_interval  = d.heartbeatInterval;
 
             if (d.bootCount !== undefined)       result.boot_count         = d.bootCount;
             if (d.resetReason !== undefined)     result.reset_reason       = d.resetReason;
@@ -189,6 +202,8 @@ const tzLocal = {
             'max_distance', 'angle_left', 'angle_right', 'tracking_mode', 'coord_publishing',
             'occupancy_cooldown', 'occupancy_delay',
             'fallback_mode', 'fallback_cooldown',
+            'fallback_enable', 'soft_fault', 'hard_timeout_sec', 'ack_timeout_ms',
+            'heartbeat_enable', 'heartbeat_interval', 'heartbeat',
             ...Array.from({length: 10}, (_, i) => `fallback_cooldown_zone_${i + 1}`),
             ...Array.from({length: 10}, (_, i) => [
                 `zone_${i + 1}_vertex_count`,
@@ -281,6 +296,12 @@ const tzLocal = {
                 occupancy_delay:    {attr: 'occupancyDelay',    val: (v) => v},
                 fallback_mode:      {attr: 'fallbackMode',      val: (v) => v ? 1 : 0},
                 fallback_cooldown:  {attr: 'fallbackCooldown',  val: (v) => v},
+                heartbeat_enable:   {attr: 'heartbeatEnable',   val: (v) => v ? 1 : 0},
+                heartbeat_interval: {attr: 'heartbeatInterval', val: (v) => v},
+                heartbeat:          {attr: 'heartbeat',         val: (_) => 1},
+                fallback_enable:    {attr: 'fallbackEnable',    val: (v) => v ? 1 : 0},
+                hard_timeout_sec:   {attr: 'hardTimeoutSec',    val: (v) => v},
+                ack_timeout_ms:     {attr: 'ackTimeoutMs',      val: (v) => v},
             };
             const m = map[key];
             if (m) {
@@ -322,6 +343,9 @@ const tzLocal = {
                 coord_publishing: 'coordPublishing', occupancy_cooldown: 'occupancyCooldown',
                 occupancy_delay: 'occupancyDelay',
                 fallback_mode: 'fallbackMode', fallback_cooldown: 'fallbackCooldown',
+                fallback_enable: 'fallbackEnable', soft_fault: 'softFault',
+                hard_timeout_sec: 'hardTimeoutSec', ack_timeout_ms: 'ackTimeoutMs',
+                heartbeat_enable: 'heartbeatEnable', heartbeat_interval: 'heartbeatInterval',
             };
             if (attrs[key]) await ep1.read('ld2450Config', [attrs[key]]);
         },
@@ -424,6 +448,42 @@ const exposesDefinition = [
             {unit: 's', value_min: 0, value_max: 600, value_step: 1})
     ),
 
+    /* Software watchdog (heartbeat) */
+    binaryExpose('heartbeat_enable', 'Heartbeat watchdog', ACCESS_ALL, true, false,
+        'Enable software watchdog. When enabled, the device expects periodic heartbeat writes ' +
+        'from the coordinator. If none arrive within 2× the interval, fallback mode activates. ' +
+        'Use with the provided HA automation blueprint.'),
+
+    numericExpose('heartbeat_interval', 'Heartbeat interval', ACCESS_ALL,
+        'Expected interval between heartbeat writes from the coordinator. ' +
+        'Watchdog timeout = interval × 2.',
+        {unit: 's', value_min: 30, value_max: 3600, value_step: 1}),
+
+    enumExpose('heartbeat', 'Heartbeat ping', ACCESS_SET, ['ping'],
+        'Write "ping" to reset the software watchdog timer. Called by the HA automation blueprint.'),
+
+    /* Soft/hard two-tier fallback control */
+    binaryExpose('fallback_enable', 'Fallback enable', ACCESS_ALL, true, false,
+        'Enable the soft/hard two-tier fallback system. When off, device operates in pure HA mode ' +
+        '(no APS probing). When on, APS ACK timeouts trigger soft fallback, escalating to hard ' +
+        'fallback if coordinator remains offline beyond hard_timeout_sec.'),
+
+    numericExpose('soft_fault', 'Soft fault count', ACCESS_STATE,
+        'Number of transient APS timeouts since last coordinator ACK. Firmware resets to 0 when ' +
+        'coordinator ACKs. Read-only — use as HA trigger for edge case handling (e.g. suppress ' +
+        'occupant count increment during soft fault).',
+        {value_min: 0, value_max: 255}),
+
+    numericExpose('hard_timeout_sec', 'Hard timeout', ACCESS_ALL,
+        'Seconds after first soft fault before escalating to hard (sticky) fallback. ' +
+        'Default: 10s. Set higher to reduce false hard fallbacks on busy networks.',
+        {unit: 's', value_min: 5, value_max: 120, value_step: 1}),
+
+    numericExpose('ack_timeout_ms', 'ACK timeout', ACCESS_ALL,
+        'Milliseconds to wait for APS ACK from coordinator before triggering soft fallback. ' +
+        'Default: 2000ms. Increase if your network has consistent APS retry delays > 2s.',
+        {unit: 'ms', value_min: 500, value_max: 10000, value_step: 100}),
+
     /* Crash diagnostics (read-only) */
     numericExpose('boot_count', 'Boot count', ACCESS_STATE,
         'Total number of device reboots (monotonic counter)', {}),
@@ -489,8 +549,10 @@ const definition = {
              maximumReportInterval: 300, reportableChange: 1},
             {attribute: 'targetCoords', minimumReportInterval: 0,
              maximumReportInterval: 300},
-            /* fallback_mode: report on any change (delta=0) so HA sees transitions promptly */
+            /* fallback_mode and soft_fault: report on any change (delta=0) so HA sees transitions promptly */
             {attribute: 'fallbackMode', minimumReportInterval: 0,
+             maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'softFault', minimumReportInterval: 0,
              maximumReportInterval: 3600, reportableChange: 0},
         ]);
 
@@ -499,6 +561,8 @@ const definition = {
             'targetCount', 'targetCoords', 'maxDistance', 'angleLeft', 'angleRight',
             'trackingMode', 'coordPublishing', 'occupancyCooldown', 'occupancyDelay',
             'fallbackMode', 'fallbackCooldown',
+            'fallbackEnable', 'softFault', 'hardTimeoutSec', 'ackTimeoutMs',
+            'heartbeatEnable', 'heartbeatInterval',
             'bootCount', 'resetReason', 'lastUptimeSec', 'minFreeHeap',
         ]);
         /* Read zone config attrs one zone at a time — 40 attrs in one frame exceeds ZCL frame limits */

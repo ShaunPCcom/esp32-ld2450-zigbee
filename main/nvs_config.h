@@ -32,6 +32,15 @@ typedef struct {
     /* Coordinator fallback */
     uint8_t  fallback_mode;               /* 0=normal, 1=fallback active (sticky, NVS-backed) */
     uint16_t fallback_cooldown_sec[11];   /* [0]=main EP, [1-10]=zones; default 300s each */
+
+    /* Soft/hard two-tier fallback parameters */
+    uint8_t  fallback_enable;             /* 0=disabled (pure HA mode), 1=soft/hard fallback active */
+    uint8_t  hard_timeout_sec;            /* seconds after first soft fault → hard fallback (default: 10) */
+    uint16_t ack_timeout_ms;             /* APS ACK timeout in ms (default: 2000) */
+
+    /* Software watchdog (heartbeat) */
+    uint8_t  heartbeat_enable;            /* 0=off, 1=expect periodic heartbeat writes */
+    uint16_t heartbeat_interval_sec;      /* expected beat interval; watchdog = interval × 2; default 120s */
 } nvs_config_t;
 
 /** Initialize NVS config module and load saved config (or defaults). */
@@ -62,3 +71,18 @@ esp_err_t nvs_config_save_fallback_mode(uint8_t mode);
 
 /** Save one fallback cooldown entry.  endpoint_index: 0=main, 1-10=zones. */
 esp_err_t nvs_config_save_fallback_cooldown(uint8_t endpoint_index, uint16_t sec);
+
+/** Save heartbeat_enable (0=off, 1=on) to NVS. */
+esp_err_t nvs_config_save_heartbeat_enable(uint8_t enable);
+
+/** Save heartbeat_interval_sec to NVS. */
+esp_err_t nvs_config_save_heartbeat_interval(uint16_t sec);
+
+/** Save fallback_enable (0=disabled, 1=enabled) to NVS. */
+esp_err_t nvs_config_save_fallback_enable(uint8_t enable);
+
+/** Save hard_timeout_sec (seconds to escalate soft→hard fallback) to NVS. */
+esp_err_t nvs_config_save_hard_timeout_sec(uint8_t sec);
+
+/** Save ack_timeout_ms (APS ACK timeout in ms) to NVS. */
+esp_err_t nvs_config_save_ack_timeout_ms(uint16_t ms);
