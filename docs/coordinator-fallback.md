@@ -127,8 +127,9 @@ Click **LD2450 Coordinator Fallback Watchdog → Create Automation** and configu
 
 **LD2450 Sensors** — Select the **main occupancy entity** for each sensor. This
 is the one named `binary_sensor.<device_name>_occupancy` (without a zone number).
-Do not select zone occupancy entities — the fallback attributes (`soft_fault`,
-`fallback_mode`) only exist on the main entity.
+Do not select zone occupancy entities — the blueprint uses the main entity to
+find the `fallback_mode` switch and `soft_fault` sensor on the same device
+automatically.
 
 | Input | Default | Description |
 |-------|---------|-------------|
@@ -142,27 +143,30 @@ Do not select zone occupancy entities — the fallback attributes (`soft_fault`,
 
 ## Recovery Behaviour
 
-The blueprint automatically clears hard fallback in all four recovery scenarios:
+The blueprint automatically clears hard fallback in three recovery scenarios:
 
 | Scenario | How recovery works | Delay |
 |----------|-------------------|-------|
-| Coordinator radio goes down while HA is running | Blueprint sees `fallback_mode` turn on, waits, then clears it | 30 s |
-| Heartbeat watchdog fires, then HA/Z2M recovers | Next heartbeat ping goes through, blueprint sees hard fallback is active and clears it | ~1 min (next heartbeat cycle) |
-| Z2M restarts (HA stays up) | Blueprint detects Z2M bridge reconnection, checks and clears | 15 s |
-| HA server reboots | Blueprint runs on HA startup, checks and clears | 60 s |
+| Heartbeat watchdog fires, then HA/Z2M recovers | Next heartbeat ping goes through, blueprint finds `fallback_mode` switch is on and clears it | ~1 min (next heartbeat cycle) |
+| Z2M restarts (HA stays up) | Blueprint detects Z2M bridge reconnection, finds `fallback_mode` switch is on and clears it | 15 s |
+| HA server reboots | Blueprint runs on HA startup, finds `fallback_mode` switch is on and clears it | 60 s |
 
-The delays give Z2M and HA time to fully start up before the blueprint takes action.
+The delays give Z2M and HA time to fully start up before the blueprint takes
+action. The blueprint finds each sensor's `fallback_mode` switch automatically
+by looking up all entities on the same device as the selected occupancy entity.
 
 ---
 
 ## Monitoring
 
-Both attributes are visible in the Z2M device page under the **Exposes** tab.
+Z2M creates separate entities for fallback status. You can find them on the
+device page in Z2M under **Exposes**, or in HA under the device's entities.
 
 ### `soft_fault` — network hiccup counter
 
-Increments each time a soft fallback fires. Resets to 0 automatically when
-the coordinator responds.
+A **sensor** entity (`sensor.<device_name>_soft_fault`) that increments each
+time a soft fallback fires. The firmware resets it to 0 automatically when the
+coordinator responds.
 
 - **A few per day**: Normal on a busy Zigbee network
 - **Multiple per hour**: Your network is congested — increase `ack_timeout_ms`
@@ -172,11 +176,12 @@ the coordinator responds.
 
 ### `fallback_mode` — hard fallback status
 
-`false` = normal operation. `true` = hard fallback active.
+A **switch** entity (`switch.<device_name>_fallback_mode`). Off = normal
+operation. On = hard fallback active.
 
-The blueprint clears this automatically on recovery. If it stays `true` after
-Z2M and HA are both back and running, clear it manually in Z2M or via the
-CLI (`ld fallback clear`).
+The blueprint clears this automatically on recovery. If it stays on after Z2M
+and HA are both back and running, turn it off manually in Z2M, in HA, or via
+the CLI (`ld fallback clear`).
 
 ---
 
