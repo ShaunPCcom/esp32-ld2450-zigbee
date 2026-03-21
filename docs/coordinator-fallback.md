@@ -15,22 +15,38 @@ Zigbee presence sensors normally report occupancy to Home Assistant, which then
 controls your lights via automations. If HA or Z2M goes offline — even for a
 few seconds — your lights stop responding.
 
-The fallback system handles two scenarios:
+The fallback system handles three scenarios:
 
-**Brief network hiccup** (soft fallback): The sensor notices a delayed response
-from the coordinator. It immediately turns on the bound light directly, then
-the coordinator catches up a second later and everything returns to normal
-automatically. You might not even notice it happened.
+**Brief radio hiccup** (soft fallback): The Zigbee coordinator's radio briefly
+drops a response — maybe interference, maybe a congested network. The sensor
+immediately turns on the bound light directly. A second later the coordinator
+catches up and everything returns to normal automatically. You might not even
+notice it happened.
 
-**Real outage** (hard fallback): The coordinator is genuinely gone. After a
-configurable timeout (default 10 s), the sensor takes over completely — turning
+**Real radio outage** (hard fallback): The coordinator's radio is genuinely
+unreachable — powered off, out of range, or hardware failure. After a
+configurable timeout (default 10 s), the sensor takes over completely, turning
 lights on and off based on presence until HA explicitly tells it to stop. This
 survives reboots.
 
-**HA software crash** (heartbeat watchdog): HA sends a periodic "ping" to each
-sensor. If the pings stop arriving (because HA crashed but the Zigbee dongle is
-still powered), the sensor enters hard fallback. Covers the case where the radio
-is fine but the software is dead.
+**HA or Z2M software crash** (heartbeat watchdog): HA sends a periodic "ping"
+to each sensor via the blueprint automation. If the pings stop arriving —
+because HA crashed, Z2M stopped, or the server rebooted — the sensor enters
+hard fallback. This catches the common case where the Zigbee dongle is still
+powered and responding at the radio level, but the software on top of it is
+dead.
+
+### Important: Z2M going down ≠ radio going down
+
+Stopping Z2M software does **not** trigger soft fallback. The Zigbee dongle's
+radio firmware handles acknowledgements independently of Z2M — so the sensor
+still gets radio-level responses even when Z2M isn't running. From the sensor's
+perspective, the coordinator's radio is fine.
+
+This is why the **heartbeat watchdog** exists. It's the only way to detect
+software-level failures (Z2M stopped, HA crashed, server rebooted) when the
+radio hardware is still alive. Without the heartbeat, the sensor would never
+know Z2M was gone.
 
 ---
 
@@ -126,11 +142,12 @@ Do not select zone occupancy entities — the fallback attributes (`soft_fault`,
 
 ## Recovery Behaviour
 
-The blueprint automatically clears hard fallback in all three outage scenarios:
+The blueprint automatically clears hard fallback in all four recovery scenarios:
 
-| Scenario | What happens | Delay |
-|----------|-------------|-------|
-| Coordinator goes down while HA is running | Blueprint sees `fallback_mode` turn on, waits, then clears it | 30 s |
+| Scenario | How recovery works | Delay |
+|----------|-------------------|-------|
+| Coordinator radio goes down while HA is running | Blueprint sees `fallback_mode` turn on, waits, then clears it | 30 s |
+| Heartbeat watchdog fires, then HA/Z2M recovers | Next heartbeat ping goes through, blueprint sees hard fallback is active and clears it | ~1 min (next heartbeat cycle) |
 | Z2M restarts (HA stays up) | Blueprint detects Z2M bridge reconnection, checks and clears | 15 s |
 | HA server reboots | Blueprint runs on HA startup, checks and clears | 60 s |
 
@@ -193,6 +210,11 @@ you want lights to turn off when a room empties during an outage.
 **Fallback can only send On/Off commands.** Brightness levels, colour
 temperature, time-of-day conditions, and similar logic are HA's responsibility
 and resume automatically once the coordinator recovers.
+
+**Soft fallback only detects radio-level failures.** If Z2M stops but the
+Zigbee dongle is still powered, the sensor won't notice — it still gets
+radio-level acknowledgements. Enable the heartbeat watchdog to catch
+software-level failures.
 
 ---
 
