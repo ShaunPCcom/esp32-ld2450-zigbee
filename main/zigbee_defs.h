@@ -64,9 +64,7 @@
 
 /* ---- Identity strings ---- */
 #define ZB_MANUFACTURER_NAME           "\x07""LD2450Z"   /* ZCL string: len byte + chars */
-/* DEV identifier: distinguishes dev/coordinator-fallback branch from production in Z2M.
- * IMPORTANT: revert to "\x09""LD2450-H2" before merging to master. */
-#define ZB_MODEL_IDENTIFIER            "\x0d""LD2450-H2-DEV"
+#define ZB_MODEL_IDENTIFIER            "\x09""LD2450-H2"
 
 /* ---- Shared zigbee_ctrl attributes ---- */
 #include "zigbee_ctrl.h"
