@@ -148,6 +148,16 @@ action:
                     topic: >-
                       zigbee2mqtt/{{ device_attr(device_id(repeat.item), 'name') }}/set
                     payload: '{"heartbeat": "ping"}'
+                # If coordinator is reachable (ping went through) and sensor is in
+                # hard fallback, clear it — covers heartbeat recovery after watchdog timeout
+                - condition: template
+                  value_template: >-
+                    {{ state_attr(repeat.item, 'fallback_mode') == true }}
+                - service: mqtt.publish
+                  data:
+                    topic: >-
+                      zigbee2mqtt/{{ device_attr(device_id(repeat.item), 'name') }}/set
+                    payload: '{"fallback_mode": false}'
 
       # ---- Soft fault notification ----
       - conditions:
