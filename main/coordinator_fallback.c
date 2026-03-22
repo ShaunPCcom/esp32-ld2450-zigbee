@@ -23,9 +23,6 @@ typedef struct {
     bool     awaiting_ack;            /* ACK window is open (alarm scheduled) */
     bool     soft_fallback_active;    /* this EP is in soft fallback (transient) */
     bool     fallback_session_active; /* entered occupancy under hard fallback */
-    bool     fallback_light_on;       /* we sent On via binding for this session */
-    uint8_t  off_timer_generation;    /* incremented to invalidate stale off-timers */
-    uint8_t  off_timer_param;         /* param used to schedule off-timer (for cancel) */
 } fallback_ep_state_t;
 
 /* s_ep[0] = EP1 (main), s_ep[1-10] = EP2-11 (zones) */
@@ -64,7 +61,6 @@ static uint8_t  s_heartbeat_gen          = 0;  /* generation counter -- invalida
 
 static void ack_timeout_cb(uint8_t param);
 static void hard_timeout_cb(uint8_t param);
-static void fallback_off_cb(uint8_t param);
 static void heartbeat_timeout_cb(uint8_t param);
 static void send_onoff_via_binding(uint8_t endpoint, bool on);
 static void enter_fallback_mode(void);
@@ -188,27 +184,10 @@ static void ack_timeout_cb(uint8_t param)
 
         if (occupied) {
             send_onoff_via_binding(endpoint, true);
-            s_ep[ep_idx].fallback_light_on = true;
             ESP_LOGI(TAG, "ep%u: sent On via binding (hard fallback)", endpoint);
-        } else if (s_ep[ep_idx].fallback_light_on) {
-            nvs_config_t cfg;
-            nvs_config_get(&cfg);
-            uint16_t cooldown_sec = cfg.fallback_cooldown_sec[ep_idx];
-
-            s_ep[ep_idx].off_timer_generation++;
-            uint8_t gen = s_ep[ep_idx].off_timer_generation;
-            uint8_t off_param = (uint8_t)((ep_idx << 4) | (gen & 0x0F));
-            s_ep[ep_idx].off_timer_param = off_param;
-
-            if (cooldown_sec == 0) {
-                send_onoff_via_binding(endpoint, false);
-                s_ep[ep_idx].fallback_light_on = false;
-                ESP_LOGI(TAG, "ep%u: sent Off via binding (hard fallback, no cooldown)", endpoint);
-            } else {
-                esp_zb_scheduler_alarm(fallback_off_cb, off_param,
-                                       (uint32_t)cooldown_sec * 1000);
-                ESP_LOGI(TAG, "ep%u: Off scheduled in %us (hard fallback cooldown)", endpoint, cooldown_sec);
-            }
+        } else {
+            send_onoff_via_binding(endpoint, false);
+            ESP_LOGI(TAG, "ep%u: sent Off via binding (hard fallback)", endpoint);
         }
         return;
     }
@@ -220,19 +199,20 @@ static void ack_timeout_cb(uint8_t param)
     if (!already_soft) {
         s_soft_fault_count++;
         set_soft_fault_attr(s_soft_fault_count);
-        ESP_LOGW(TAG, "ep%u: soft fallback #%u (occ=%d) -- On via binding if occupied",
+        ESP_LOGW(TAG, "ep%u: soft fallback #%u (occ=%d)",
                  endpoint, s_soft_fault_count, occupied);
     } else {
         ESP_LOGW(TAG, "ep%u: additional soft fault (already soft, occ=%d)", endpoint, occupied);
     }
 
-    /* Only send On in soft fallback -- Off handled by HA on recovery or hard fallback */
-    if (occupied && !s_ep[ep_idx].fallback_light_on) {
+    /* Dispatch On/Off via binding based on current occupancy */
+    if (occupied) {
         send_onoff_via_binding(endpoint, true);
-        s_ep[ep_idx].fallback_light_on = true;
         ESP_LOGI(TAG, "ep%u: sent On via binding (soft fallback)", endpoint);
+    } else {
+        send_onoff_via_binding(endpoint, false);
+        ESP_LOGI(TAG, "ep%u: sent Off via binding (soft fallback)", endpoint);
     }
-    /* occupied=false: do NOT send Off -- HA reconciles on coordinator recovery */
 
     /* Schedule hard timeout if not already pending */
     if (!s_hard_timeout_pending) {
@@ -269,44 +249,12 @@ static void hard_timeout_cb(uint8_t param)
         if (s_ep[i].soft_fallback_active) {
             s_ep[i].soft_fallback_active    = false;
             s_ep[i].fallback_session_active = true;
-            /* fallback_light_on already set from soft dispatch */
         }
     }
 
     ESP_LOGW(TAG, "HARD FALLBACK -- no coordinator response in %us (escalated from soft)",
              s_hard_timeout_sec);
     enter_fallback_mode();
-}
-
-/* ================================================================== */
-/*  Fallback off callback                                               */
-/* ================================================================== */
-
-static void fallback_off_cb(uint8_t param)
-{
-    uint8_t ep_idx = (param >> 4) & 0x0F;
-    uint8_t gen    = param & 0x0F;
-
-    if (ep_idx > 10) return;
-    uint8_t endpoint = ep_idx + 1;
-
-    /* Stale timer guard: generation must still match */
-    if ((s_ep[ep_idx].off_timer_generation & 0x0F) != gen) {
-        ESP_LOGD(TAG, "ep%u: stale off-timer (gen mismatch), ignoring", endpoint);
-        return;
-    }
-
-    /* Only send Off if all conditions still hold */
-    if (!s_ep[ep_idx].fallback_session_active
-            || !s_ep[ep_idx].fallback_light_on
-            || s_ep[ep_idx].occupied) {
-        ESP_LOGD(TAG, "ep%u: off-timer fired but conditions changed, skipping Off", endpoint);
-        return;
-    }
-
-    send_onoff_via_binding(endpoint, false);
-    s_ep[ep_idx].fallback_light_on = false;
-    ESP_LOGI(TAG, "ep%u: sent Off via binding (hard fallback cooldown expired)", endpoint);
 }
 
 /* ================================================================== */
@@ -516,31 +464,23 @@ void coordinator_fallback_on_occupancy_change(uint8_t endpoint, bool occupied)
         s_ep[ep_idx].fallback_session_active = true;
 
         if (occupied) {
-            esp_zb_scheduler_alarm_cancel(fallback_off_cb, s_ep[ep_idx].off_timer_param);
-            s_ep[ep_idx].off_timer_generation++;
+            send_onoff_via_binding(endpoint, true);
+            ESP_LOGI(TAG, "ep%u: sent On via binding (hard fallback)", endpoint);
+        } else {
+            send_onoff_via_binding(endpoint, false);
+            ESP_LOGI(TAG, "ep%u: sent Off via binding (hard fallback)", endpoint);
+        }
+        return;
+    }
 
-            if (!s_ep[ep_idx].fallback_light_on) {
-                send_onoff_via_binding(endpoint, true);
-                s_ep[ep_idx].fallback_light_on = true;
-                ESP_LOGI(TAG, "ep%u: sent On via binding (hard fallback)", endpoint);
-            }
-        } else if (s_ep[ep_idx].fallback_light_on) {
-            nvs_config_t cfg;
-            nvs_config_get(&cfg);
-            uint16_t cooldown_sec = cfg.fallback_cooldown_sec[ep_idx];
-
-            s_ep[ep_idx].off_timer_generation++;
-            uint8_t gen       = s_ep[ep_idx].off_timer_generation;
-            uint8_t off_param = (uint8_t)((ep_idx << 4) | (gen & 0x0F));
-            s_ep[ep_idx].off_timer_param = off_param;
-
-            if (cooldown_sec == 0) {
-                send_onoff_via_binding(endpoint, false);
-                s_ep[ep_idx].fallback_light_on = false;
-            } else {
-                esp_zb_scheduler_alarm(fallback_off_cb, off_param,
-                                       (uint32_t)cooldown_sec * 1000);
-            }
+    /* If soft fallback is active for this EP, dispatch directly (skip probing) */
+    if (s_ep[ep_idx].soft_fallback_active) {
+        if (occupied) {
+            send_onoff_via_binding(endpoint, true);
+            ESP_LOGI(TAG, "ep%u: sent On via binding (soft fallback, occ change)", endpoint);
+        } else {
+            send_onoff_via_binding(endpoint, false);
+            ESP_LOGI(TAG, "ep%u: sent Off via binding (soft fallback, occ change)", endpoint);
         }
         return;
     }
@@ -578,7 +518,9 @@ bool coordinator_fallback_is_active(void)
 bool coordinator_fallback_ep_session_active(uint8_t ep_idx)
 {
     if (ep_idx > 10) return false;
-    return s_ep[ep_idx].fallback_session_active;
+    return s_ep[ep_idx].fallback_session_active
+        || s_ep[ep_idx].soft_fallback_active
+        || s_ep[ep_idx].awaiting_ack;
 }
 
 void coordinator_fallback_clear(void)
@@ -595,16 +537,11 @@ void coordinator_fallback_clear(void)
         s_hard_timeout_pending = false;
     }
 
-    /* Invalidate all pending off-timers and reset per-EP session state */
+    /* Reset per-EP session state */
     for (int i = 0; i < 11; i++) {
-        if (s_ep[i].fallback_session_active) {
-            esp_zb_scheduler_alarm_cancel(fallback_off_cb, s_ep[i].off_timer_param);
-        }
         s_ep[i].fallback_session_active = false;
         s_ep[i].soft_fallback_active    = false;
-        s_ep[i].fallback_light_on       = false;
         s_ep[i].awaiting_ack            = false;
-        s_ep[i].off_timer_generation++;
     }
 
     /* Reset soft fault counter */
