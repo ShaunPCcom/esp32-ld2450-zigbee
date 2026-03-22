@@ -464,9 +464,11 @@ const exposesDefinition = [
 
     /* Soft/hard two-tier fallback control */
     binaryExpose('fallback_enable', 'Fallback enable', ACCESS_ALL, true, false,
-        'Enable the soft/hard two-tier fallback system. When off, device operates in pure HA mode ' +
-        '(no APS probing). When on, APS ACK timeouts trigger soft fallback, escalating to hard ' +
-        'fallback if coordinator remains offline beyond hard_timeout_sec.'),
+        'Enable the soft/hard two-tier fallback system. When off, the device relies entirely on Home Assistant ' +
+        'for light control. When on, the device monitors coordinator responsiveness: if no response arrives ' +
+        'within the soft fallback timeout, it temporarily controls bound lights directly. If the coordinator ' +
+        'remains unresponsive beyond the hard fallback timeout, the device enters persistent autonomous mode ' +
+        'until Home Assistant explicitly clears it.'),
 
     numericExpose('soft_fault', 'Soft fault count', ACCESS_STATE,
         'Number of transient APS timeouts since last coordinator ACK. Firmware resets to 0 when ' +
@@ -474,14 +476,19 @@ const exposesDefinition = [
         'occupant count increment during soft fault).',
         {value_min: 0, value_max: 255}),
 
-    numericExpose('hard_timeout_sec', 'Hard timeout', ACCESS_ALL,
-        'Seconds after first soft fault before escalating to hard (sticky) fallback. ' +
-        'Default: 10s. Set higher to reduce false hard fallbacks on busy networks.',
+    numericExpose('hard_timeout_sec', 'Hard fallback timeout', ACCESS_ALL,
+        'Time in seconds after soft fallback activates before the device escalates to hard (sticky) fallback. ' +
+        'In hard fallback, the device permanently controls bound lights based on occupancy until Home Assistant ' +
+        'explicitly clears the fallback state. Hard fallback persists across reboots. ' +
+        'Default: 10s. Set higher to tolerate brief coordinator outages without escalating.',
         {unit: 's', value_min: 5, value_max: 120, value_step: 1}),
 
-    numericExpose('ack_timeout_ms', 'ACK timeout', ACCESS_ALL,
-        'Milliseconds to wait for APS ACK from coordinator before triggering soft fallback. ' +
-        'Default: 2000ms. Increase if your network has consistent APS retry delays > 2s.',
+    numericExpose('ack_timeout_ms', 'Soft fallback timeout', ACCESS_ALL,
+        'Time in milliseconds the device waits for a coordinator response after an occupancy change. ' +
+        'If no response arrives within this window, the device enters soft fallback: it sends On/Off ' +
+        'commands directly to bound lights based on occupancy, bypassing the coordinator. Soft fallback ' +
+        'is temporary — the first successful coordinator response clears it globally. ' +
+        'Default: 2000ms. Increase if your Zigbee network has high latency.',
         {unit: 'ms', value_min: 500, value_max: 10000, value_step: 100}),
 
     /* Crash diagnostics (read-only) */
