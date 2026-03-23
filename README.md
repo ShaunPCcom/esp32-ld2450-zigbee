@@ -14,7 +14,7 @@ This is a native Zigbee alternative to ESPHome-based LD2450 implementations. No 
 
 - **3-target tracking** — real-time X/Y coordinates (mm) for up to 3 people
 - **10 configurable zones** — custom polygon areas with 3–10 vertices each (e.g., "couch", "desk", "bed")
-- **Zigbee2MQTT integration** — 90 Home Assistant entities via external converter
+- **Zigbee2MQTT integration** — 89 Home Assistant entities via external converter
 - **OTA firmware updates** — remote updates via Zigbee2MQTT with automatic rollback if an update fails
 - **Coordinator fallback** — keeps lights working during coordinator or HA outages using direct Zigbee bindings and a heartbeat watchdog ([setup guide](docs/coordinator-fallback.md))
 - **All settings persist** — configuration survives reboots, even without a coordinator connection
@@ -119,7 +119,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 4. **Reconfigure** (if entities are missing):
    - Select the device in Z2M → click "Reconfigure"
-   - Refresh Home Assistant to see all 90 entities
+   - Refresh Home Assistant to see all 89 entities
 
 ## Firmware Updates (OTA)
 
@@ -159,7 +159,7 @@ Releases are fully automated via GitHub Actions — tagging a new version trigge
 
 ## Exposed Entities
 
-All 90 entities are automatically discovered in Home Assistant via Zigbee2MQTT.
+All 89 entities are automatically discovered in Home Assistant via Zigbee2MQTT.
 
 ### Sensors (Read-only)
 
@@ -193,12 +193,6 @@ All 90 entities are automatically discovered in Home Assistant via Zigbee2MQTT.
 | `hard_timeout_sec` | Numeric | 1–60 s | Seconds after first soft fault before escalating to hard fallback |
 | `ack_timeout_ms` | Numeric | 500–10000 ms | How long to wait for coordinator ACK before soft fallback |
 
-### Fallback Diagnostics (Read-only)
-
-| Entity | Type | Description |
-|--------|------|-------------|
-| `soft_fault` | Numeric | Network hiccup counter — increments on ACK timeout, clears on recovery |
-
 ### Zone Configuration (5 entities per zone, 50 total)
 
 Each of the 10 zones has:
@@ -219,7 +213,7 @@ Each of the 10 zones has:
 | `factory_reset_confirm` | Text | Type `factory-reset` exactly to wipe everything |
 | `heartbeat` | Select | Set to `ping` to send a manual heartbeat |
 
-**Total**: 90 entities (11 occupancy, 14 config, 50 zone config, 9 diagnostic sensors, 3 actions, 3 target coordinates)
+**Total**: 89 entities (11 occupancy, 14 config, 50 zone config, 8 diagnostic sensors, 3 actions, 3 target coordinates)
 
 ## Configuration
 
