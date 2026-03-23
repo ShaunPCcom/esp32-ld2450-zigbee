@@ -48,7 +48,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.2
+    version: 5.5.3
   zigbee_core:
     component_hash: 49bf2c30a4bf90aff2e8a7b034be48526fbf3a40c3542a631a89945cf73f2309
     dependencies: []

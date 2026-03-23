@@ -419,6 +419,9 @@ static void zigbee_task(void *pv)
         ESP_ZB_DEVICE_TYPE_ED
     #endif
     );
+    #if CONFIG_LD2450_ZB_ROUTER
+    zb_cfg.nwk_cfg.zczr_cfg.max_children = 10;
+    #endif
 
     esp_zb_init(&zb_cfg);
 

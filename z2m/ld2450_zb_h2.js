@@ -56,7 +56,7 @@ const ld2450ConfigCluster = {
         heartbeatInterval:    {ID: 0x0027, type: ZCL_UINT16,   write: true},
         heartbeat:            {ID: 0x0028, type: ZCL_UINT8,    write: true},
         fallbackEnable:       {ID: 0x0029, type: ZCL_UINT8,    write: true},
-        softFault:            {ID: 0x002A, type: ZCL_UINT8,    report: true},
+
         hardTimeoutSec:       {ID: 0x002B, type: ZCL_UINT8,    write: true},
         ackTimeoutMs:         {ID: 0x002C, type: ZCL_UINT16,   write: true},
         bootCount:            {ID: 0x0030, type: ZCL_UINT32,   report: false},
@@ -147,7 +147,7 @@ const fzLocal = {
             if (d.fallbackMode !== undefined)       result.fallback_mode       = d.fallbackMode === 1;
             if (d.fallbackCooldown !== undefined)   result.fallback_cooldown   = d.fallbackCooldown;
             if (d.fallbackEnable !== undefined)     result.fallback_enable     = d.fallbackEnable === 1;
-            if (d.softFault !== undefined)          result.soft_fault          = d.softFault;
+
             if (d.hardTimeoutSec !== undefined)     result.hard_timeout_sec    = d.hardTimeoutSec;
             if (d.ackTimeoutMs !== undefined)       result.ack_timeout_ms      = d.ackTimeoutMs;
             if (d.heartbeatEnable !== undefined)    result.heartbeat_enable    = d.heartbeatEnable === 1;
@@ -202,7 +202,7 @@ const tzLocal = {
             'max_distance', 'angle_left', 'angle_right', 'tracking_mode', 'coord_publishing',
             'occupancy_cooldown', 'occupancy_delay',
             'fallback_mode', 'fallback_cooldown',
-            'fallback_enable', 'soft_fault', 'hard_timeout_sec', 'ack_timeout_ms',
+            'fallback_enable', 'hard_timeout_sec', 'ack_timeout_ms',
             'heartbeat_enable', 'heartbeat_interval', 'heartbeat',
             ...Array.from({length: 10}, (_, i) => `fallback_cooldown_zone_${i + 1}`),
             ...Array.from({length: 10}, (_, i) => [
@@ -343,7 +343,7 @@ const tzLocal = {
                 coord_publishing: 'coordPublishing', occupancy_cooldown: 'occupancyCooldown',
                 occupancy_delay: 'occupancyDelay',
                 fallback_mode: 'fallbackMode', fallback_cooldown: 'fallbackCooldown',
-                fallback_enable: 'fallbackEnable', soft_fault: 'softFault',
+                fallback_enable: 'fallbackEnable',
                 hard_timeout_sec: 'hardTimeoutSec', ack_timeout_ms: 'ackTimeoutMs',
                 heartbeat_enable: 'heartbeatEnable', heartbeat_interval: 'heartbeatInterval',
             };
@@ -470,12 +470,6 @@ const exposesDefinition = [
         'remains unresponsive beyond the hard fallback timeout, the device enters persistent autonomous mode ' +
         'until Home Assistant explicitly clears it.'),
 
-    numericExpose('soft_fault', 'Soft fault count', ACCESS_STATE,
-        'Number of transient APS timeouts since last coordinator ACK. Firmware resets to 0 when ' +
-        'coordinator ACKs. Read-only — use as HA trigger for edge case handling (e.g. suppress ' +
-        'occupant count increment during soft fault).',
-        {value_min: 0, value_max: 255}),
-
     numericExpose('hard_timeout_sec', 'Hard fallback timeout', ACCESS_ALL,
         'Time in seconds after soft fallback activates before the device escalates to hard (sticky) fallback. ' +
         'In hard fallback, the device permanently controls bound lights based on occupancy until Home Assistant ' +
@@ -554,10 +548,8 @@ const definition = {
              maximumReportInterval: 300, reportableChange: 1},
             {attribute: 'targetCoords', minimumReportInterval: 0,
              maximumReportInterval: 300},
-            /* fallback_mode and soft_fault: report on any change (delta=0) so HA sees transitions promptly */
+            /* fallback_mode: report on any change (delta=0) so HA sees transitions promptly */
             {attribute: 'fallbackMode', minimumReportInterval: 0,
-             maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'softFault', minimumReportInterval: 0,
              maximumReportInterval: 3600, reportableChange: 0},
         ]);
 
@@ -566,7 +558,7 @@ const definition = {
             'targetCount', 'targetCoords', 'maxDistance', 'angleLeft', 'angleRight',
             'trackingMode', 'coordPublishing', 'occupancyCooldown', 'occupancyDelay',
             'fallbackMode', 'fallbackCooldown',
-            'fallbackEnable', 'softFault', 'hardTimeoutSec', 'ackTimeoutMs',
+            'fallbackEnable', 'hardTimeoutSec', 'ackTimeoutMs',
             'heartbeatEnable', 'heartbeatInterval',
             'bootCount', 'resetReason', 'lastUptimeSec', 'minFreeHeap',
         ]);
