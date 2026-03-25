@@ -138,12 +138,23 @@ static esp_err_t enter_config(void)
     return read_ack(CMD_ENABLE_CONF);
 }
 
-/* Exit config mode */
+/* Exit config mode — retry up to 3 times */
 static esp_err_t exit_config(void)
 {
-    esp_err_t err = send_frame(CMD_DISABLE_CONF, NULL, 0);
-    if (err != ESP_OK) return err;
-    return read_ack(CMD_DISABLE_CONF);
+    for (int attempt = 0; attempt < 3; attempt++) {
+        esp_err_t err = send_frame(CMD_DISABLE_CONF, NULL, 0);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "exit_config send failed (attempt %d)", attempt + 1);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        err = read_ack(CMD_DISABLE_CONF);
+        if (err == ESP_OK) return ESP_OK;
+        ESP_LOGW(TAG, "exit_config ACK failed (attempt %d): %s", attempt + 1, esp_err_to_name(err));
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    ESP_LOGE(TAG, "exit_config failed after 3 attempts");
+    return ESP_FAIL;
 }
 
 /* Send a command wrapped in enter/exit config.
@@ -180,9 +191,16 @@ static esp_err_t send_config_command(uint8_t cmd_id, const uint8_t *value, uint1
 
     vTaskDelay(pdMS_TO_TICKS(CMD_DELAY_MS));
 
-    exit_config();
+    esp_err_t exit_err = exit_config();
+    if (exit_err != ESP_OK) {
+        ESP_LOGE(TAG, "Config mode exit failed — restarting sensor");
+        /* Send restart command directly (already in config mode) */
+        send_frame(CMD_RESTART, NULL, 0);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
     ld2450_rx_resume();
-    return ESP_OK;
+    return err;  /* return the command result, not exit result */
 }
 
 /* ---- Public API ---- */
