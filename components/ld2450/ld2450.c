@@ -6,6 +6,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "freertos/portmacro.h"
 
 #include "driver/gpio.h"
@@ -32,6 +33,9 @@ static TaskHandle_t s_uart_task = NULL;
 static uart_port_t s_uart_num = UART_NUM_MAX;
 static volatile bool s_rx_pause_requested = false;
 static SemaphoreHandle_t s_rx_paused_sem = NULL;  // signaled when RX task has paused
+
+#define LD2450_FIRST_FRAME_BIT  BIT0
+static EventGroupHandle_t s_event_group = NULL;
 
 // Protects s_zones, runtime cfg, and state snapshots
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -134,6 +138,13 @@ static void ld2450_uart_task(void *arg)
         int n = uart_read_bytes(s_uart_num, buf, buf_len, pdMS_TO_TICKS(100));
         if (n > 0) {
             if (ld2450_parser_feed(parser, buf, (size_t)n)) {
+                static bool s_first_frame_signaled = false;
+                if (!s_first_frame_signaled) {
+                    xEventGroupSetBits(s_event_group, LD2450_FIRST_FRAME_BIT);
+                    s_first_frame_signaled = true;
+                    ESP_LOGI(TAG, "First data frame received — sensor ready");
+                }
+
                 const ld2450_report_t *r = ld2450_parser_get_report(parser);
 
                 // Snapshot runtime cfg
@@ -273,6 +284,9 @@ esp_err_t ld2450_init(const ld2450_config_t *cfg)
     s_rx_paused_sem = xSemaphoreCreateBinary();
     if (!s_rx_paused_sem) return ESP_ERR_NO_MEM;
 
+    s_event_group = xEventGroupCreate();
+    if (!s_event_group) return ESP_ERR_NO_MEM;
+
     BaseType_t ok = xTaskCreate(ld2450_uart_task, "ld2450_uart", 4096, NULL, 10, &s_uart_task);
     if (ok != pdPASS) {
         s_uart_task = NULL;
@@ -370,4 +384,15 @@ esp_err_t ld2450_set_zone(size_t zone_index, const ld2450_zone_t *zone)
     s_zones[zone_index] = *zone;
     portEXIT_CRITICAL(&s_lock);
     return ESP_OK;
+}
+
+esp_err_t ld2450_wait_for_first_frame(uint32_t timeout_ms)
+{
+    if (!s_event_group) return ESP_ERR_INVALID_STATE;
+    EventBits_t bits = xEventGroupWaitBits(s_event_group,
+                                            LD2450_FIRST_FRAME_BIT,
+                                            pdFALSE,  /* don't clear */
+                                            pdTRUE,
+                                            pdMS_TO_TICKS(timeout_ms));
+    return (bits & LD2450_FIRST_FRAME_BIT) ? ESP_OK : ESP_ERR_TIMEOUT;
 }

@@ -75,3 +75,10 @@ uart_port_t ld2450_get_uart_port(void);
 // Must be called in pairs. Blocks until the RX task yields.
 void ld2450_rx_pause(void);
 void ld2450_rx_resume(void);
+
+/**
+ * Block until the first valid data frame is received from the sensor.
+ * Returns ESP_OK if frame received, ESP_ERR_TIMEOUT if timeout_ms elapsed.
+ * Use this to confirm the sensor is alive before sending config commands.
+ */
+esp_err_t ld2450_wait_for_first_frame(uint32_t timeout_ms);
