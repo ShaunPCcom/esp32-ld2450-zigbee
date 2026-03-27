@@ -14,6 +14,11 @@ extern "C" {
 #include "nvs_config.h"
 #include "zigbee_init.h"
 #include "zigbee_signal_handlers.h"
+#if CONFIG_IDF_TARGET_ESP32C6
+#include "esp_netif.h"
+#include "esp_event.h"
+#include "wifi_manager.h"
+#endif
 }
 
 #include "sdkconfig.h"
@@ -109,6 +114,15 @@ extern "C" void app_main(void)
 
     /* Bring up CLI early so we can debug even if Zigbee gets noisy */
     ld2450_cli_start();
+
+#if CONFIG_IDF_TARGET_ESP32C6
+    /* WiFi + web configuration interface (C6 only) */
+    esp_netif_init();
+    esp_event_loop_create_default();
+    wifi_manager_init();
+    wifi_manager_start();
+    ESP_LOGI(TAG, "WiFi manager started");
+#endif
 
     /* Zigbee bring-up */
     zigbee_init();
