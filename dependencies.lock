@@ -45,6 +45,16 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 3.0.3
+  espressif/mdns:
+    component_hash: 1ebe3bd675bb9d1c58f52bc0b609b32f74e572b01c328f9e61282040c775495c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.11.0
   idf:
     source:
       type: idf
@@ -78,9 +88,10 @@ direct_dependencies:
 - espressif/esp-zboss-lib
 - espressif/esp-zigbee-lib
 - espressif/led_strip
+- espressif/mdns
 - idf
 - zigbee_core
 - zigbee_ota
-manifest_hash: 4a21ef379a599a899f21593ee1cc6847014b295f2f0589da8e335a35c49a86ed
+manifest_hash: 6af6bdf6be163c33ab28d1b90e4f49cc3875cbea808b60687dd6ce9c957edfee
 target: esp32c6
 version: 2.0.0

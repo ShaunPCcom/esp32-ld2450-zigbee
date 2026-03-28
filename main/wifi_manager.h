@@ -50,3 +50,15 @@ esp_err_t wifi_manager_set_credentials(const char *ssid, const char *password);
 
 /** Erase stored WiFi credentials from NVS. */
 esp_err_t wifi_manager_clear_credentials(void);
+
+/** True if WiFi credentials (SSID) are stored in NVS. */
+bool wifi_manager_has_credentials(void);
+
+/** Persist device hostname to NVS wifi_cfg namespace. */
+esp_err_t wifi_manager_save_hostname(const char *hostname);
+
+/**
+ * Read stored hostname into buf.  Returns true if a hostname was found,
+ * false if the key is missing or buf is too small.
+ */
+bool wifi_manager_get_hostname(char *buf, size_t len);

@@ -18,6 +18,7 @@ extern "C" {
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "wifi_manager.h"
+#include "web_server.h"
 #endif
 }
 
@@ -116,16 +117,28 @@ extern "C" void app_main(void)
     ld2450_cli_start();
 
 #if CONFIG_IDF_TARGET_ESP32C6
-    /* WiFi + web configuration interface (C6 only) */
+    /* Two-mode boot (C6 only):
+     *   Provisioning mode — no WiFi credentials stored: WiFi AP + captive portal,
+     *                        Zigbee NOT started (softAP/802.15.4 coex is broken).
+     *   Operational mode  — credentials present: Zigbee + WiFi STA (coex works). */
     esp_netif_init();
     esp_event_loop_create_default();
     wifi_manager_init();
-    wifi_manager_start();
-    ESP_LOGI(TAG, "WiFi manager started");
-#endif
 
-    /* Zigbee bring-up */
+    if (wifi_manager_has_credentials()) {
+        ESP_LOGI(TAG, "Credentials found — operational mode: Zigbee + WiFi STA");
+        zigbee_init();
+        wifi_manager_start();   /* has creds → calls start_sta_mode() */
+    } else {
+        ESP_LOGI(TAG, "No credentials — provisioning mode: WiFi AP only");
+        wifi_manager_start();   /* no creds → calls start_ap_mode() */
+    }
+
+    web_server_start();
+    ESP_LOGI(TAG, "WiFi manager started");
+#else
     zigbee_init();
+#endif
 
     /* Initialize button handler (C++ ButtonHandler class) */
     g_button = new ButtonHandler(BOARD_BUTTON_GPIO,
