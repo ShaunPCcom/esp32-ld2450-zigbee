@@ -147,7 +147,7 @@ jobs:
             -c ld2450_zb_c6_v${VERSION}.ota \
             -v ${FILE_VERSION_HEX} \
             -m 0x131B \
-            -i 0x0002 \
+            -i 0x0003 \
             -f build_c6/ld2450_zb_h2.bin
 
           echo "✅ OTA images created"
@@ -210,7 +210,7 @@ jobs:
             },
             {
               "manufacturerCode": 4891,
-              "imageType": 2,
+              "imageType": 3,
               "fileVersion": ${FILE_VERSION_DEC},
               "url": "https://github.com/${{ github.repository }}/releases/download/${TAG}/ld2450_zb_c6_v${VERSION}.ota"
             }
