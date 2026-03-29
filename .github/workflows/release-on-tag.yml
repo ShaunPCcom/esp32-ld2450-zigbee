@@ -226,17 +226,23 @@ jobs:
           CHANNEL="${{ steps.version.outputs.channel }}"
           IS_PRERELEASE="${{ steps.version.outputs.is_prerelease }}"
 
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            BRANCH="dev"
+          else
+            BRANCH="master"
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Fetch and checkout the target branch (workflow runs in detached HEAD at tag commit)
+          git fetch origin ${BRANCH}
+          git checkout ${BRANCH}
+          git pull origin ${BRANCH}
+
           git add z2m/ota_index.json
           git diff --staged --quiet || git commit -m "chore: update ${CHANNEL} OTA index for ${TAG}"
-
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            git push origin HEAD:dev
-          else
-            git push origin HEAD:master
-          fi
+          git push origin ${BRANCH}
 
           echo "✅ OTA index committed and pushed to ${CHANNEL} branch"
 
