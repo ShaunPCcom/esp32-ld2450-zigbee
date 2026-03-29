@@ -6,7 +6,7 @@ dependencies:
       git: https://github.com/ShaunPCcom/esp32-zigbee-common.git
       path: board_led
       type: git
-    version: 07ac2afab424584138ef7adf505d9a7086530047
+    version: a91db6beaa1ac51dad341f41813b9df0485cb4a5
   crash_diag:
     component_hash: f8254309dacfafa90e6e04dd4692e78fdd5563bd1392825a8811ca53149ec460
     dependencies: []
@@ -14,7 +14,7 @@ dependencies:
       git: https://github.com/ShaunPCcom/esp32-zigbee-common.git
       path: crash_diag
       type: git
-    version: 07ac2afab424584138ef7adf505d9a7086530047
+    version: a91db6beaa1ac51dad341f41813b9df0485cb4a5
   espressif/esp-zboss-lib:
     component_hash: 321883d142421f65009972408287441794250057668a11abbdfd8bec77c3309a
     dependencies:
@@ -60,13 +60,13 @@ dependencies:
       type: idf
     version: 5.5.3
   zigbee_core:
-    component_hash: 49bf2c30a4bf90aff2e8a7b034be48526fbf3a40c3542a631a89945cf73f2309
+    component_hash: 79aeb8fd6c67542ede15c81a07535a4fbea52b8e9490beb73875efdca554dd4e
     dependencies: []
     source:
       git: https://github.com/ShaunPCcom/esp32-zigbee-common.git
       path: zigbee_core
       type: git
-    version: 07ac2afab424584138ef7adf505d9a7086530047
+    version: a91db6beaa1ac51dad341f41813b9df0485cb4a5
   zigbee_ota:
     component_hash: 76675260d368fccf04aa24d560d7d40960a283387d8e678dc1267a8715de1c95
     dependencies:
@@ -92,6 +92,6 @@ direct_dependencies:
 - idf
 - zigbee_core
 - zigbee_ota
-manifest_hash: 6af6bdf6be163c33ab28d1b90e4f49cc3875cbea808b60687dd6ce9c957edfee
+manifest_hash: eefc66a5694073b01085b951ef9c909af7ceaaca676e5a86877f7f536bb77417
 target: esp32c6
 version: 2.0.0
