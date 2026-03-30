@@ -2,13 +2,13 @@
   {
     "manufacturerCode": 4891,
     "imageType": 1,
-    "fileVersion": 131584,
-    "url": "https://github.com/ShaunPCcom/ESP32-H2-LD2450/releases/download/v2.2.0-beta/ld2450_zb_h2_v2.2.0-beta.ota"
+    "fileVersion": 131585,
+    "url": "https://github.com/ShaunPCcom/ESP32-H2-LD2450/releases/download/v2.2.1-beta/ld2450_zb_h2_v2.2.1-beta.ota"
   },
   {
     "manufacturerCode": 4891,
     "imageType": 3,
-    "fileVersion": 131584,
-    "url": "https://github.com/ShaunPCcom/ESP32-H2-LD2450/releases/download/v2.2.0-beta/ld2450_zb_c6_v2.2.0-beta.ota"
+    "fileVersion": 131585,
+    "url": "https://github.com/ShaunPCcom/ESP32-H2-LD2450/releases/download/v2.2.1-beta/ld2450_zb_c6_v2.2.1-beta.ota"
   }
 ]
