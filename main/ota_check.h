@@ -39,3 +39,16 @@ uint16_t ota_check_get_interval_hours(void);
 
 /** Update and persist the check interval, then restart the timer. */
 void ota_check_set_interval_hours(uint16_t hours);
+
+/**
+ * OTA index URL used for both background checks and Wi-Fi OTA transport.
+ * Returns the persisted override if set, otherwise the built-in default URL.
+ * Pointer is stable until ota_check_set_index_url() is called.
+ */
+const char *ota_check_get_index_url(void);
+
+/**
+ * Persist a custom OTA index URL and notify the OTA component.
+ * Pass NULL or empty string to clear the override and revert to the default.
+ */
+void ota_check_set_index_url(const char *url);

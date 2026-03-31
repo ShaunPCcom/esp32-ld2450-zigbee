@@ -25,6 +25,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadStatus();
   await loadOtaStatus();
   await loadOtaInterval();
+  await loadOtaIndexUrl();
   connectWS();
   buildZoneGrid();
   renderZoneDetail();
@@ -846,4 +847,49 @@ function fmtUptime(s) {
 function fmtBytes(b) {
   if (b == null) return '—';
   return (b / 1024).toFixed(1) + ' KB';
+}
+
+/* ─────────────────────────────────────────────────────────────
+   OTA Index URL
+───────────────────────────────────────────────────────────── */
+async function loadOtaIndexUrl() {
+  try {
+    const r = await fetch('/api/ota/index-url');
+    const d = await r.json();
+    const inp = document.getElementById('inp-ota-url');
+    if (inp && d.url) inp.value = d.url;
+  } catch (e) {}
+}
+
+async function saveOtaIndexUrl() {
+  const inp = document.getElementById('inp-ota-url');
+  if (!inp) return;
+  try {
+    const r = await fetch('/api/ota/index-url', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ url: inp.value.trim() })
+    });
+    const d = await r.json();
+    inp.value = d.url;
+    toast('SAVED', 'ok');
+  } catch (e) {
+    toast('SAVE FAILED', 'err');
+  }
+}
+
+async function resetOtaIndexUrl() {
+  try {
+    const r = await fetch('/api/ota/index-url', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ url: '' })
+    });
+    const d = await r.json();
+    const inp = document.getElementById('inp-ota-url');
+    if (inp) inp.value = d.url;
+    toast('RESET TO DEFAULT', 'ok');
+  } catch (e) {
+    toast('RESET FAILED', 'err');
+  }
 }

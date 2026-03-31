@@ -868,6 +868,49 @@ static esp_err_t handle_post_ota_interval(httpd_req_t *req)
 }
 
 /* ================================================================== */
+/*  GET /api/ota/index-url                                            */
+/* ================================================================== */
+
+static esp_err_t handle_get_ota_index_url(httpd_req_t *req)
+{
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "url", ota_check_get_index_url());
+    send_json(req, 200, resp);
+    cJSON_Delete(resp);
+    return ESP_OK;
+}
+
+/* ================================================================== */
+/*  POST /api/ota/index-url — { "url": "..." }  (empty = reset)      */
+/* ================================================================== */
+
+static esp_err_t handle_post_ota_index_url(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) { send_json(req, 400, NULL); return ESP_OK; }
+
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    if (!root) { send_json(req, 400, NULL); return ESP_OK; }
+
+    cJSON *u = cJSON_GetObjectItem(root, "url");
+    if (!cJSON_IsString(u)) {
+        cJSON_Delete(root);
+        send_json(req, 400, NULL);
+        return ESP_OK;
+    }
+
+    ota_check_set_index_url(u->valuestring);  /* empty string resets to default */
+    cJSON_Delete(root);
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "url", ota_check_get_index_url());
+    send_json(req, 200, resp);
+    cJSON_Delete(resp);
+    return ESP_OK;
+}
+
+/* ================================================================== */
 /*  404 handler — redirect unknown URIs to / (catches all OS probes)  */
 /* ================================================================== */
 
@@ -917,6 +960,8 @@ esp_err_t web_server_start(void)
         { .uri = "/api/ota/check",       .method = HTTP_POST, .handler = handle_post_ota_check    },
         { .uri = "/api/ota/interval",    .method = HTTP_GET,  .handler = handle_get_ota_interval  },
         { .uri = "/api/ota/interval",    .method = HTTP_POST, .handler = handle_post_ota_interval },
+        { .uri = "/api/ota/index-url",   .method = HTTP_GET,  .handler = handle_get_ota_index_url },
+        { .uri = "/api/ota/index-url",   .method = HTTP_POST, .handler = handle_post_ota_index_url},
     };
 
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {

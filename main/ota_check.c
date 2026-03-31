@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ota_check.h"
 #include "version.h"
+#include "zigbee_ota.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
@@ -14,17 +15,21 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define TAG               "ota_check"
-#define OTA_INDEX_URL     "https://shaunpccom.github.io/zigbee-ota-index/ota_index.json"
-#define OTA_MFR_CODE      0x131B
-#define OTA_IMAGE_TYPE_C6 0x0003
-#define NVS_NAMESPACE     "ld2450_cfg"
-#define NVS_KEY_INTERVAL  "ota_chk_int"
+#define TAG                "ota_check"
+#define OTA_INDEX_URL_DEFAULT \
+    "https://shaunpccom.github.io/zigbee-ota-index/ota_index.json"
+#define OTA_MFR_CODE       0x131B
+#define OTA_IMAGE_TYPE_C6  0x0003
+#define NVS_NAMESPACE      "ld2450_cfg"
+#define NVS_KEY_INTERVAL   "ota_chk_int"
+#define NVS_KEY_INDEX_URL  "ota_idx_url"
 #define DEFAULT_INTERVAL_H 12
-#define INDEX_BUF_SIZE    6144
+#define INDEX_BUF_SIZE     6144
+#define INDEX_URL_MAX      256
 
 static bool               s_available = false;
 static char               s_latest_version[16] = "";
+static char               s_index_url[INDEX_URL_MAX] = OTA_INDEX_URL_DEFAULT;
 static esp_timer_handle_t s_timer = NULL;
 static TaskHandle_t       s_task  = NULL;
 static SemaphoreHandle_t  s_mutex = NULL;
@@ -37,7 +42,7 @@ static void do_check(void)
     xSemaphoreTake(s_mutex, portMAX_DELAY);
 
     esp_http_client_config_t cfg = {
-        .url                = OTA_INDEX_URL,
+        .url                = s_index_url,
         .crt_bundle_attach  = esp_crt_bundle_attach,
         .timeout_ms         = 10000,
         .disable_auto_redirect = false,
@@ -152,6 +157,18 @@ static uint16_t load_interval(void)
     return val;
 }
 
+static void load_index_url(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &h) == ESP_OK) {
+        size_t len = sizeof(s_index_url);
+        if (nvs_get_str(h, NVS_KEY_INDEX_URL, s_index_url, &len) != ESP_OK) {
+            strlcpy(s_index_url, OTA_INDEX_URL_DEFAULT, sizeof(s_index_url));
+        }
+        nvs_close(h);
+    }
+}
+
 static void start_periodic_timer(uint16_t hours)
 {
     if (s_timer) {
@@ -171,6 +188,8 @@ static void start_periodic_timer(uint16_t hours)
 void ota_check_init(void)
 {
     s_mutex = xSemaphoreCreateMutex();
+    load_index_url();
+    zigbee_ota_set_wifi_index_url(s_index_url);
     xTaskCreate(check_task_fn, "ota_check", 6144, NULL, 2, &s_task);
     start_periodic_timer(load_interval());
 }
@@ -206,4 +225,31 @@ void ota_check_set_interval_hours(uint16_t hours)
         nvs_close(h);
     }
     start_periodic_timer(hours);
+}
+
+const char *ota_check_get_index_url(void)
+{
+    return s_index_url;
+}
+
+void ota_check_set_index_url(const char *url)
+{
+    if (url && url[0]) {
+        strlcpy(s_index_url, url, sizeof(s_index_url));
+    } else {
+        strlcpy(s_index_url, OTA_INDEX_URL_DEFAULT, sizeof(s_index_url));
+    }
+    /* Notify OTA component so Z2M-triggered Wi-Fi transport uses the new URL */
+    zigbee_ota_set_wifi_index_url(s_index_url);
+    /* Persist */
+    nvs_handle_t h;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h) == ESP_OK) {
+        if (url && url[0]) {
+            nvs_set_str(h, NVS_KEY_INDEX_URL, s_index_url);
+        } else {
+            nvs_erase_key(h, NVS_KEY_INDEX_URL);
+        }
+        nvs_commit(h);
+        nvs_close(h);
+    }
 }

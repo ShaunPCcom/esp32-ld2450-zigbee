@@ -199,6 +199,14 @@
           <input type="range" id="sl-ota-interval" min="1" max="72" step="1" value="12">
         </div>
         <button class="btn" onclick="saveOtaInterval()">Save Interval</button>
+
+        <div class="sec">OTA Index URL</div>
+        <div class="field">
+          <input type="text" id="inp-ota-url" class="text-input"
+            placeholder="https://…/ota_index.json" spellcheck="false" autocomplete="off">
+        </div>
+        <button class="btn" onclick="saveOtaIndexUrl()">Save URL</button>
+        <button class="btn" onclick="resetOtaIndexUrl()">Reset to Default</button>
       </div>
 
     </div><!-- /tab-body -->

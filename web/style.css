@@ -355,6 +355,22 @@ input[type=range]::-moz-range-thumb {
   box-shadow: 0 0 5px var(--acc-glow);
 }
 
+/* ── TEXT INPUT ── */
+.text-input {
+  width: 100%;
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: var(--r);
+  outline: none;
+  transition: border-color .15s;
+}
+.text-input:focus { border-color: var(--border2); }
+.text-input::placeholder { color: var(--text-dim); }
+
 /* ── SELECT ── */
 select {
   width: 100%;
