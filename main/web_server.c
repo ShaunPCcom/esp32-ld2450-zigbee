@@ -17,6 +17,7 @@
 #include "freertos/task.h"
 #include "ld2450.h"
 #include "zigbee_ota.h"
+#include "ota_check.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -792,6 +793,81 @@ static esp_err_t handle_post_ota(httpd_req_t *req)
 }
 
 /* ================================================================== */
+/*  GET /api/ota/status — update availability                         */
+/* ================================================================== */
+
+static esp_err_t handle_get_ota_status(httpd_req_t *req)
+{
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "available", ota_check_available());
+    cJSON_AddStringToObject(resp, "current", FIRMWARE_VERSION_STRING_PLAIN);
+    cJSON_AddStringToObject(resp, "latest", ota_check_latest_version());
+    send_json(req, 200, resp);
+    cJSON_Delete(resp);
+    return ESP_OK;
+}
+
+/* ================================================================== */
+/*  POST /api/ota/check — run immediate check, return updated status  */
+/* ================================================================== */
+
+static esp_err_t handle_post_ota_check(httpd_req_t *req)
+{
+    ota_check_trigger();  /* blocking ~2-3 s */
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "available", ota_check_available());
+    cJSON_AddStringToObject(resp, "current", FIRMWARE_VERSION_STRING_PLAIN);
+    cJSON_AddStringToObject(resp, "latest", ota_check_latest_version());
+    send_json(req, 200, resp);
+    cJSON_Delete(resp);
+    return ESP_OK;
+}
+
+/* ================================================================== */
+/*  GET /api/ota/interval                                              */
+/* ================================================================== */
+
+static esp_err_t handle_get_ota_interval(httpd_req_t *req)
+{
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "interval_hours", ota_check_get_interval_hours());
+    send_json(req, 200, resp);
+    cJSON_Delete(resp);
+    return ESP_OK;
+}
+
+/* ================================================================== */
+/*  POST /api/ota/interval — { "interval_hours": N }                  */
+/* ================================================================== */
+
+static esp_err_t handle_post_ota_interval(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) { send_json(req, 400, NULL); return ESP_OK; }
+
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    if (!root) { send_json(req, 400, NULL); return ESP_OK; }
+
+    cJSON *h = cJSON_GetObjectItem(root, "interval_hours");
+    if (!cJSON_IsNumber(h)) {
+        cJSON_Delete(root);
+        send_json(req, 400, NULL);
+        return ESP_OK;
+    }
+
+    ota_check_set_interval_hours((uint16_t)h->valueint);
+    cJSON_Delete(root);
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "status", "ok");
+    send_json(req, 200, resp);
+    cJSON_Delete(resp);
+    return ESP_OK;
+}
+
+/* ================================================================== */
 /*  404 handler — redirect unknown URIs to / (catches all OS probes)  */
 /* ================================================================== */
 
@@ -813,7 +889,7 @@ esp_err_t web_server_start(void)
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.lru_purge_enable  = true;
     cfg.stack_size        = 8192;  /* JSON serialization needs headroom */
-    cfg.max_uri_handlers  = 16;    /* default is 8; we register 11+ handlers */
+    cfg.max_uri_handlers  = 24;    /* default is 8; enough for all registered handlers */
 
     esp_err_t err = httpd_start(&s_server, &cfg);
     if (err != ESP_OK) {
@@ -836,7 +912,11 @@ esp_err_t web_server_start(void)
         { .uri = "/api/wifi-reset",      .method = HTTP_POST, .handler = handle_wifi_reset     },
         { .uri = "/api/restart",         .method = HTTP_POST, .handler = handle_restart        },
         { .uri = "/api/factory-reset",   .method = HTTP_POST, .handler = handle_factory_reset  },
-        { .uri = "/api/ota",           .method = HTTP_POST, .handler = handle_post_ota       },
+        { .uri = "/api/ota",             .method = HTTP_POST, .handler = handle_post_ota          },
+        { .uri = "/api/ota/status",      .method = HTTP_GET,  .handler = handle_get_ota_status    },
+        { .uri = "/api/ota/check",       .method = HTTP_POST, .handler = handle_post_ota_check    },
+        { .uri = "/api/ota/interval",    .method = HTTP_GET,  .handler = handle_get_ota_interval  },
+        { .uri = "/api/ota/interval",    .method = HTTP_POST, .handler = handle_post_ota_interval },
     };
 
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
@@ -856,6 +936,9 @@ esp_err_t web_server_start(void)
 
     /* Start 2 Hz push task (operational mode — does nothing if no WS clients) */
     xTaskCreate(ws_push_task, "ws_push", 4096, NULL, 4, NULL);
+
+    /* Start background OTA update check (initial check after 15 s) */
+    ota_check_init();
 
     ESP_LOGI(TAG, "HTTP server started on port 80");
     return ESP_OK;

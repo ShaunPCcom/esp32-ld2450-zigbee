@@ -20,8 +20,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   initSliders();
   initToggles();
   initSelects();
+  initOtaInterval();
   await loadConfig();
   await loadStatus();
+  await loadOtaStatus();
+  await loadOtaInterval();
   connectWS();
   buildZoneGrid();
   renderZoneDetail();
@@ -29,8 +32,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('hdr-host').textContent = location.hostname;
 
   /* Poll for external config changes (e.g. Z2M attribute writes) */
-  setInterval(pollConfig,  3000);
-  setInterval(pollStatus, 10000);
+  setInterval(pollConfig,    3000);
+  setInterval(pollStatus,   10000);
+  /* Poll OTA status periodically to catch background check results */
+  setInterval(loadOtaStatus, 60000);
 });
 
 /* ─────────────────────────────────────────────────────────────
@@ -701,6 +706,104 @@ function connectWS() {
 /* ─────────────────────────────────────────────────────────────
    Actions
 ───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   OTA Update
+───────────────────────────────────────────────────────────── */
+function applyOtaStatus(d) {
+  const statusEl  = document.getElementById('sy-ota-status');
+  const updateBtn = document.getElementById('btn-ota-update');
+  if (!statusEl || !updateBtn) return;
+
+  const avail = d && d.available;
+  statusEl.textContent = avail ? ('v' + d.latest + ' available') : 'Up to date';
+  updateBtn.disabled   = !avail;
+  document.body.classList.toggle('has-update', !!avail);
+}
+
+async function loadOtaStatus() {
+  try {
+    const r = await fetch('/api/ota/status');
+    if (!r.ok) return;
+    applyOtaStatus(await r.json());
+  } catch (e) {}
+}
+
+async function doOtaCheck() {
+  const btn = document.getElementById('btn-ota-check');
+  btn.disabled   = true;
+  btn.textContent = '↻ Checking…';
+  try {
+    const r = await fetch('/api/ota/check', { method: 'POST' });
+    const d = await r.json();
+    applyOtaStatus(d);
+    toast(d.available ? 'UPDATE AVAILABLE' : 'UP TO DATE', 'ok');
+  } catch (e) {
+    toast('CHECK FAILED', 'err');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '↻ Check for Updates';
+  }
+}
+
+async function doOtaUpdate() {
+  if (!confirm('Download and install firmware update? Device will restart.')) return;
+  try {
+    const r = await fetch('/api/ota', { method: 'POST' });
+    if (r.status === 202)      toast('UPDATE STARTED…', 'ok');
+    else if (r.status === 409) toast('UPDATE ALREADY IN PROGRESS', 'err');
+    else                       toast('UPDATE FAILED', 'err');
+  } catch (e) {
+    toast('UPDATE FAILED', 'err');
+  }
+}
+
+function goToSystem() {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('on'));
+  document.querySelector('[data-tab="system"]').classList.add('on');
+  document.getElementById('pane-system').classList.add('on');
+  editMode = false;
+  document.getElementById('edit-banner').classList.remove('show');
+}
+
+function initOtaInterval() {
+  const sl = document.getElementById('sl-ota-interval');
+  if (sl) sl.addEventListener('input', updateOtaIntervalVal);
+}
+
+function updateOtaIntervalVal() {
+  const sl = document.getElementById('sl-ota-interval');
+  const el = document.getElementById('sy-ota-interval-v');
+  if (sl && el) el.textContent = sl.value + ' h';
+}
+
+async function loadOtaInterval() {
+  try {
+    const r = await fetch('/api/ota/interval');
+    if (!r.ok) return;
+    const d = await r.json();
+    const sl = document.getElementById('sl-ota-interval');
+    if (sl) { sl.value = d.interval_hours; updateOtaIntervalVal(); }
+  } catch (e) {}
+}
+
+async function saveOtaInterval() {
+  const sl = document.getElementById('sl-ota-interval');
+  if (!sl) return;
+  try {
+    const r = await fetch('/api/ota/interval', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ interval_hours: Number(sl.value) })
+    });
+    const d = await r.json();
+    if (d.status === 'ok') toast('SAVED', 'ok');
+    else                   toast('ERROR', 'err');
+  } catch (e) {
+    toast('SAVE FAILED', 'err');
+  }
+}
+
 async function wifiReset() {
   if (!confirm('Clear WiFi credentials and reboot to setup mode?')) return;
   await fetch('/api/wifi-reset', { method: 'POST' });

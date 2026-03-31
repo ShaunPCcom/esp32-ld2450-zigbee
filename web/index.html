@@ -18,6 +18,10 @@
   </div>
 </header>
 
+<div class="update-bar" id="update-bar" onclick="goToSystem()">
+  ↑ FIRMWARE UPDATE AVAILABLE — CLICK TO UPDATE
+</div>
+
 <div class="layout">
 
   <!-- Radar -->
@@ -177,6 +181,24 @@
         <br>
         <button class="btn" onclick="doRestart()">↺ Restart Device</button>
         <button class="btn danger" onclick="doFactoryReset()">✕ Factory Reset</button>
+
+        <div class="sec">Firmware Update</div>
+        <div class="stat-grid">
+          <div class="stat-row">
+            <span class="stat-k">Status</span>
+            <span class="stat-v" id="sy-ota-status">—</span>
+          </div>
+        </div>
+        <br>
+        <button class="btn" id="btn-ota-check" onclick="doOtaCheck()">↻ Check for Updates</button>
+        <button class="btn primary" id="btn-ota-update" onclick="doOtaUpdate()" disabled>↑ Update Firmware</button>
+
+        <div class="sec">Update Check</div>
+        <div class="field">
+          <div class="flabel">Check Interval <span class="fval" id="sy-ota-interval-v">—</span></div>
+          <input type="range" id="sl-ota-interval" min="1" max="72" step="1" value="12">
+        </div>
+        <button class="btn" onclick="saveOtaInterval()">Save Interval</button>
       </div>
 
     </div><!-- /tab-body -->

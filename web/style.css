@@ -94,6 +94,25 @@ header {
   50% { opacity:.45; }
 }
 
+/* ── UPDATE BANNER ── */
+.update-bar {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  background: rgba(255,180,0,.1);
+  border-bottom: 1px solid rgba(255,180,0,.3);
+  color: #ffb400;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.update-bar:hover { background: rgba(255,180,0,.18); }
+body.has-update .update-bar { display: flex; }
+
 /* ── LAYOUT ── */
 .layout {
   display: grid;
@@ -101,6 +120,7 @@ header {
   height: calc(100vh - 42px);
   overflow: hidden;
 }
+body.has-update .layout { height: calc(100vh - 76px); }
 
 /* ── RADAR PANEL ── */
 .radar-wrap {
@@ -405,6 +425,7 @@ select:focus { border-color: var(--border2); }
 .btn.primary:hover { background: rgba(0,232,122,.22); }
 .btn.danger  { border-color: rgba(232,56,74,.4); color: var(--danger); }
 .btn.danger:hover  { background: var(--danger-dim); border-color: var(--danger); }
+.btn:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
 
 /* ── STATUS ITEMS ── */
 .stat-grid { display: grid; gap: 7px; }
@@ -460,6 +481,7 @@ select:focus { border-color: var(--border2); }
 @media (max-width: 740px) {
   html,body { overflow: auto; height: auto; }
   .layout { grid-template-columns: 1fr; grid-template-rows: 300px auto; height: auto; }
+  body.has-update .layout { height: auto; }
   .radar-wrap { height: 300px; }
   .settings { border-left: none; border-top: 1px solid var(--border); }
   .tab-body { max-height: 70vh; }

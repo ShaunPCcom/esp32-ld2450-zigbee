@@ -11,8 +11,8 @@ set(MAIN_SRCS
 )
 
 if("${IDF_TARGET}" STREQUAL "esp32c6")
-    list(APPEND MAIN_SRCS "wifi_manager.c" "web_server.c")
-    set(C6_PRIV_REQUIRES esp_wifi esp_netif esp_event esp_http_server espressif__mdns spiffs)
+    list(APPEND MAIN_SRCS "wifi_manager.c" "web_server.c" "ota_check.c")
+    set(C6_PRIV_REQUIRES esp_wifi esp_netif esp_event esp_http_server espressif__mdns spiffs esp_http_client mbedtls)
 else()
     set(C6_PRIV_REQUIRES "")
 endif()
