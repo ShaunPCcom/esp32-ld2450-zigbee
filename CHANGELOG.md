@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.2.5 - 2026-04-04
+
+### Fixes
+- **OTA "already in progress" on every trigger**: Slot acquisition moved from query-response time to the OTA START callback. A Z2M "check for updates" fires a query response but never starts block transfer — acquiring the slot there left it permanently held, rejecting all subsequent triggers.
+- **ABORT retry double-release**: Slot is now released before scheduling the retry alarm (not held through the wait). The START callback re-acquires it when the retry fires.
+- **Z2M update check triggering spurious Wi-Fi download**: Query responses with version=0 / size=0 (Z2M check-only notifications) are now ignored instead of launching a download.
+- **Wi-Fi OTA "Out of buffer" from GitHub CDN**: GitHub release URLs redirect to a signed CDN URL with a JWT-bearing path (~930 chars). Fixed by pre-resolving the redirect chain manually before streaming, and setting `buffer_size_tx=4096` for the CDN request.
+
+---
+
 ## v2.2.4 - 2026-03-31
 
 ### Features (C6)
