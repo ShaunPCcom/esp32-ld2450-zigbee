@@ -38,38 +38,7 @@ for (let n = 0; n < 10; n++) {
 }
 
 // ---- Custom cluster definition ----
-// Attribute ID lookup table (used for fromZigbee and configure reads)
-const ATTR = {
-    targetCount:       0x0000,
-    targetCoords:      0x0001,
-    maxDistance:       0x0010,
-    angleLeft:         0x0011,
-    angleRight:        0x0012,
-    trackingMode:      0x0020,
-    coordPublishing:   0x0021,
-    occupancyCooldown: 0x0022,
-    occupancyDelay:    0x0023,
-    fallbackMode:      0x0024,
-    fallbackCooldown:  0x0025,
-    heartbeatEnable:   0x0026,
-    heartbeatInterval: 0x0027,
-    heartbeat:         0x0028,
-    fallbackEnable:    0x0029,
-    hardTimeoutSec:    0x002B,
-    ackTimeoutMs:      0x002C,
-    bootCount:         0x0030,
-    resetReason:       0x0031,
-    lastUptimeSec:     0x0032,
-    minFreeHeap:       0x0033,
-    restart:           0x00F0,
-    factoryReset:      0x00F1,
-};
-// Zone attrs: base = 0x0040 + n*4 (n=0..9); sub: +0=vertexCount, +1=coords, +2=cooldown, +3=delay
-// Fallback zone cooldown: 0x0070 + n (n=0..9)
-const CLUSTER_NAME = 'ld2450Config';
-
 const ld2450ConfigCluster = {
-    name: CLUSTER_NAME,
     ID: CLUSTER_CONFIG_ID,
     attributes: {
         targetCount:          {ID: 0x0000, type: ZCL_UINT8,    report: true},
@@ -161,39 +130,36 @@ const fzLocal = {
     },
 
     config: {
-        // Z2M dispatches unregistered custom clusters as the string representation of the
-        // numeric ID (e.g. '64512'), not the number. Use String() to ensure strict === match.
-        cluster: String(CLUSTER_CONFIG_ID),
+        cluster: 'ld2450Config',
         type: ['attributeReport', 'readResponse'],
         convert: (model, msg, publish, options, meta) => {
-            meta.logger.debug(`[ZB_LD2450] cluster 0xFC00 frame: ep=${msg.endpoint.ID} type=${msg.type} keys=${Object.keys(msg.data).join(',')}`);
             const result = {};
             const d = msg.data;
 
-            if (d[ATTR.targetCount] !== undefined)     result.target_count       = d[ATTR.targetCount];
-            if (d[ATTR.maxDistance] !== undefined)     result.max_distance       = d[ATTR.maxDistance] / 1000;
-            if (d[ATTR.angleLeft] !== undefined)       result.angle_left         = d[ATTR.angleLeft];
-            if (d[ATTR.angleRight] !== undefined)      result.angle_right        = d[ATTR.angleRight];
-            if (d[ATTR.trackingMode] !== undefined)    result.tracking_mode      = d[ATTR.trackingMode] === 0;
-            if (d[ATTR.coordPublishing] !== undefined) result.coord_publishing   = d[ATTR.coordPublishing] === 1;
-            if (d[ATTR.occupancyCooldown] !== undefined) result.occupancy_cooldown = d[ATTR.occupancyCooldown];
-            if (d[ATTR.occupancyDelay] !== undefined)    result.occupancy_delay    = d[ATTR.occupancyDelay];
-            if (d[ATTR.fallbackMode] !== undefined)      result.fallback_mode      = d[ATTR.fallbackMode] === 1;
-            if (d[ATTR.fallbackCooldown] !== undefined)  result.fallback_cooldown  = d[ATTR.fallbackCooldown];
-            if (d[ATTR.fallbackEnable] !== undefined)    result.fallback_enable    = d[ATTR.fallbackEnable] === 1;
+            if (d.targetCount !== undefined)     result.target_count       = d.targetCount;
+            if (d.maxDistance !== undefined)     result.max_distance       = d.maxDistance / 1000;
+            if (d.angleLeft !== undefined)       result.angle_left         = d.angleLeft;
+            if (d.angleRight !== undefined)      result.angle_right        = d.angleRight;
+            if (d.trackingMode !== undefined)    result.tracking_mode      = d.trackingMode === 0;
+            if (d.coordPublishing !== undefined) result.coord_publishing   = d.coordPublishing === 1;
+            if (d.occupancyCooldown !== undefined)  result.occupancy_cooldown  = d.occupancyCooldown;
+            if (d.occupancyDelay !== undefined)     result.occupancy_delay     = d.occupancyDelay;
+            if (d.fallbackMode !== undefined)       result.fallback_mode       = d.fallbackMode === 1;
+            if (d.fallbackCooldown !== undefined)   result.fallback_cooldown   = d.fallbackCooldown;
+            if (d.fallbackEnable !== undefined)     result.fallback_enable     = d.fallbackEnable === 1;
 
-            if (d[ATTR.hardTimeoutSec] !== undefined)    result.hard_timeout_sec   = d[ATTR.hardTimeoutSec];
-            if (d[ATTR.ackTimeoutMs] !== undefined)      result.ack_timeout_ms     = d[ATTR.ackTimeoutMs];
-            if (d[ATTR.heartbeatEnable] !== undefined)   result.heartbeat_enable   = d[ATTR.heartbeatEnable] === 1;
-            if (d[ATTR.heartbeatInterval] !== undefined) result.heartbeat_interval = d[ATTR.heartbeatInterval];
+            if (d.hardTimeoutSec !== undefined)     result.hard_timeout_sec    = d.hardTimeoutSec;
+            if (d.ackTimeoutMs !== undefined)       result.ack_timeout_ms      = d.ackTimeoutMs;
+            if (d.heartbeatEnable !== undefined)    result.heartbeat_enable    = d.heartbeatEnable === 1;
+            if (d.heartbeatInterval !== undefined)  result.heartbeat_interval  = d.heartbeatInterval;
 
-            if (d[ATTR.bootCount] !== undefined)     result.boot_count     = d[ATTR.bootCount];
-            if (d[ATTR.resetReason] !== undefined)   result.reset_reason   = d[ATTR.resetReason];
-            if (d[ATTR.lastUptimeSec] !== undefined) result.last_uptime_sec = d[ATTR.lastUptimeSec];
-            if (d[ATTR.minFreeHeap] !== undefined)   result.min_free_heap  = d[ATTR.minFreeHeap];
+            if (d.bootCount !== undefined)       result.boot_count         = d.bootCount;
+            if (d.resetReason !== undefined)     result.reset_reason       = d.resetReason;
+            if (d.lastUptimeSec !== undefined)   result.last_uptime_sec    = d.lastUptimeSec;
+            if (d.minFreeHeap !== undefined)     result.min_free_heap      = d.minFreeHeap;
 
-            if (d[ATTR.targetCoords] !== undefined) {
-                const str = d[ATTR.targetCoords] || '';
+            if (d.targetCoords !== undefined) {
+                const str = d.targetCoords || '';
                 const parts = str.split(';').filter(Boolean);
                 for (let i = 0; i < 3; i++) {
                     if (i < parts.length) {
@@ -207,15 +173,14 @@ const fzLocal = {
                 }
             }
 
-            /* Zone config attrs: base = 0x0040 + n*4 (n=0..9, z=n+1) */
+            /* Zone config attrs (n=0..9 firmware, z=1..10 Z2M) */
             for (let n = 0; n < 10; n++) {
                 const z = n + 1;
-                const base = 0x0040 + n * 4;
-                const vc = d[base + 0];
-                const cs = d[base + 1];
-                const cl = d[base + 2];
-                const dl = d[base + 3];
-                const fc = d[0x0070 + n];
+                const vc = d[`zone${z}VertexCount`];
+                const cs = d[`zone${z}Coords`];
+                const cl = d[`zone${z}Cooldown`];
+                const dl = d[`zone${z}Delay`];
+                const fc = d[`fallbackZone${z}Cooldown`];
 
                 if (vc !== undefined) result[`zone_${z}_vertex_count`]      = String(vc);
                 if (cs !== undefined) result[`zone_${z}_coords`]            = mmCsvToMetres(cs || '');
@@ -261,8 +226,7 @@ const tzLocal = {
                 const coordsKey = `zone_${z}_coords`;
                 const stateUpdate = {[key]: String(validVc)};
 
-                const zoneBase = 0x0040 + n * 4;
-                await zoneEp.write(CLUSTER_CONFIG_ID, {[zoneBase]: {value: validVc, type: ZCL_UINT8}});
+                await zoneEp.write('ld2450Config', {[`zone${z}VertexCount`]: validVc});
 
                 if (validVc > 0) {
                     /* Parse current pairs from state (metres CSV) */
@@ -277,7 +241,7 @@ const tzLocal = {
 
                     const metresCoords = pairs.map(p => p.join(',')).join(',');
                     try {
-                        await zoneEp.write(CLUSTER_CONFIG_ID, {[zoneBase + 1]: {value: metresCsvToMm(metresCoords), type: ZCL_CHAR_STR}});
+                        await zoneEp.write('ld2450Config', {[`zone${z}Coords`]: metresCsvToMm(metresCoords)});
                         stateUpdate[coordsKey] = metresCoords;
                     } catch (e) {
                         meta.logger.warn(`[ZB_LD2450] Coords resize failed: ${e.message}`);
@@ -296,7 +260,7 @@ const tzLocal = {
                 const n = parseInt(zoneCoordsMatch[1]) - 1;
                 const zoneEp = meta.device.getEndpoint(n + 2);
                 const mmCsv = metresCsvToMm(value);
-                await zoneEp.write(CLUSTER_CONFIG_ID, {[0x0040 + n * 4 + 1]: {value: mmCsv, type: ZCL_CHAR_STR}});
+                await zoneEp.write('ld2450Config', {[`zone${n + 1}Coords`]: mmCsv});
                 return {state: {[key]: value}};
             }
 
@@ -305,7 +269,7 @@ const tzLocal = {
             if (zoneCoolMatch) {
                 const n = parseInt(zoneCoolMatch[1]) - 1;
                 const zoneEp = meta.device.getEndpoint(n + 2);
-                await zoneEp.write(CLUSTER_CONFIG_ID, {[0x0040 + n * 4 + 2]: {value, type: ZCL_UINT16}});
+                await zoneEp.write('ld2450Config', {[`zone${n + 1}Cooldown`]: value});
                 return {state: {[key]: value}};
             }
 
@@ -314,7 +278,7 @@ const tzLocal = {
             if (zoneDelayMatch) {
                 const n = parseInt(zoneDelayMatch[1]) - 1;
                 const zoneEp = meta.device.getEndpoint(n + 2);
-                await zoneEp.write(CLUSTER_CONFIG_ID, {[0x0040 + n * 4 + 3]: {value, type: ZCL_UINT16}});
+                await zoneEp.write('ld2450Config', {[`zone${n + 1}Delay`]: value});
                 return {state: {[key]: value}};
             }
 
@@ -322,31 +286,31 @@ const tzLocal = {
             const fbZoneCoolMatch = key.match(/^fallback_cooldown_zone_(\d+)$/);
             if (fbZoneCoolMatch) {
                 const n = parseInt(fbZoneCoolMatch[1]) - 1;  /* 0-indexed */
-                await ep1.write(CLUSTER_CONFIG_ID, {[0x0070 + n]: {value, type: ZCL_UINT16}});
+                await ep1.write('ld2450Config', {[`fallbackZone${n + 1}Cooldown`]: value});
                 return {state: {[key]: value}};
             }
 
             /* Main endpoint config */
             const map = {
-                max_distance:       {id: ATTR.maxDistance,       type: ZCL_UINT16, val: (v) => Math.round(v * 1000)},
-                angle_left:         {id: ATTR.angleLeft,         type: ZCL_UINT8,  val: (v) => v},
-                angle_right:        {id: ATTR.angleRight,        type: ZCL_UINT8,  val: (v) => v},
-                tracking_mode:      {id: ATTR.trackingMode,      type: ZCL_UINT8,  val: (v) => v ? 0 : 1},
-                coord_publishing:   {id: ATTR.coordPublishing,   type: ZCL_UINT8,  val: (v) => v ? 1 : 0},
-                occupancy_cooldown: {id: ATTR.occupancyCooldown, type: ZCL_UINT16, val: (v) => v},
-                occupancy_delay:    {id: ATTR.occupancyDelay,    type: ZCL_UINT16, val: (v) => v},
-                fallback_mode:      {id: ATTR.fallbackMode,      type: ZCL_UINT8,  val: (v) => v ? 1 : 0},
-                fallback_cooldown:  {id: ATTR.fallbackCooldown,  type: ZCL_UINT16, val: (v) => v},
-                heartbeat_enable:   {id: ATTR.heartbeatEnable,   type: ZCL_UINT8,  val: (v) => v ? 1 : 0},
-                heartbeat_interval: {id: ATTR.heartbeatInterval, type: ZCL_UINT16, val: (v) => v},
-                heartbeat:          {id: ATTR.heartbeat,         type: ZCL_UINT8,  val: (_) => 1},
-                fallback_enable:    {id: ATTR.fallbackEnable,    type: ZCL_UINT8,  val: (v) => v ? 1 : 0},
-                hard_timeout_sec:   {id: ATTR.hardTimeoutSec,    type: ZCL_UINT8,  val: (v) => v},
-                ack_timeout_ms:     {id: ATTR.ackTimeoutMs,      type: ZCL_UINT16, val: (v) => v},
+                max_distance:       {attr: 'maxDistance',       val: (v) => Math.round(v * 1000)},
+                angle_left:         {attr: 'angleLeft',         val: (v) => v},
+                angle_right:        {attr: 'angleRight',        val: (v) => v},
+                tracking_mode:      {attr: 'trackingMode',      val: (v) => v ? 0 : 1},
+                coord_publishing:   {attr: 'coordPublishing',   val: (v) => v ? 1 : 0},
+                occupancy_cooldown: {attr: 'occupancyCooldown', val: (v) => v},
+                occupancy_delay:    {attr: 'occupancyDelay',    val: (v) => v},
+                fallback_mode:      {attr: 'fallbackMode',      val: (v) => v ? 1 : 0},
+                fallback_cooldown:  {attr: 'fallbackCooldown',  val: (v) => v},
+                heartbeat_enable:   {attr: 'heartbeatEnable',   val: (v) => v ? 1 : 0},
+                heartbeat_interval: {attr: 'heartbeatInterval', val: (v) => v},
+                heartbeat:          {attr: 'heartbeat',         val: (_) => 1},
+                fallback_enable:    {attr: 'fallbackEnable',    val: (v) => v ? 1 : 0},
+                hard_timeout_sec:   {attr: 'hardTimeoutSec',    val: (v) => v},
+                ack_timeout_ms:     {attr: 'ackTimeoutMs',      val: (v) => v},
             };
             const m = map[key];
             if (m) {
-                await ep1.write(CLUSTER_CONFIG_ID, {[m.id]: {value: m.val(value), type: m.type}});
+                await ep1.write('ld2450Config', {[m.attr]: m.val(value)});
                 return {state: {[key]: value}};
             }
         },
@@ -360,8 +324,13 @@ const tzLocal = {
             if (zoneMatch) {
                 const n = parseInt(zoneMatch[1]) - 1;
                 const zoneEp = meta.device.getEndpoint(n + 2);
-                const subOffset = {vertex_count: 0, coords: 1, cooldown: 2, delay: 3};
-                await zoneEp.read(CLUSTER_CONFIG_ID, [0x0040 + n * 4 + subOffset[zoneMatch[2]]]);
+                const subMap = {
+                    vertex_count: `zone${n + 1}VertexCount`,
+                    coords:       `zone${n + 1}Coords`,
+                    cooldown:     `zone${n + 1}Cooldown`,
+                    delay:        `zone${n + 1}Delay`,
+                };
+                await zoneEp.read('ld2450Config', [subMap[zoneMatch[2]]]);
                 return;
             }
 
@@ -369,22 +338,22 @@ const tzLocal = {
             const fbZoneCoolGetMatch = key.match(/^fallback_cooldown_zone_(\d+)$/);
             if (fbZoneCoolGetMatch) {
                 const n = parseInt(fbZoneCoolGetMatch[1]) - 1;
-                await ep1.read(CLUSTER_CONFIG_ID, [0x0070 + n]);
+                await ep1.read('ld2450Config', [`fallbackZone${n + 1}Cooldown`]);
                 return;
             }
 
             /* Main endpoint config */
-            const attrIds = {
-                max_distance: ATTR.maxDistance, angle_left: ATTR.angleLeft,
-                angle_right: ATTR.angleRight, tracking_mode: ATTR.trackingMode,
-                coord_publishing: ATTR.coordPublishing, occupancy_cooldown: ATTR.occupancyCooldown,
-                occupancy_delay: ATTR.occupancyDelay,
-                fallback_mode: ATTR.fallbackMode, fallback_cooldown: ATTR.fallbackCooldown,
-                fallback_enable: ATTR.fallbackEnable,
-                hard_timeout_sec: ATTR.hardTimeoutSec, ack_timeout_ms: ATTR.ackTimeoutMs,
-                heartbeat_enable: ATTR.heartbeatEnable, heartbeat_interval: ATTR.heartbeatInterval,
+            const attrs = {
+                max_distance: 'maxDistance', angle_left: 'angleLeft',
+                angle_right: 'angleRight', tracking_mode: 'trackingMode',
+                coord_publishing: 'coordPublishing', occupancy_cooldown: 'occupancyCooldown',
+                occupancy_delay: 'occupancyDelay',
+                fallback_mode: 'fallbackMode', fallback_cooldown: 'fallbackCooldown',
+                fallback_enable: 'fallbackEnable',
+                hard_timeout_sec: 'hardTimeoutSec', ack_timeout_ms: 'ackTimeoutMs',
+                heartbeat_enable: 'heartbeatEnable', heartbeat_interval: 'heartbeatInterval',
             };
-            if (attrIds[key] !== undefined) await ep1.read(CLUSTER_CONFIG_ID, [attrIds[key]]);
+            if (attrs[key]) await ep1.read('ld2450Config', [attrs[key]]);
         },
     },
 
@@ -393,7 +362,7 @@ const tzLocal = {
         convertSet: async (entity, key, value, meta) => {
             registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
-            await ep.write(CLUSTER_CONFIG_ID, {[ATTR.restart]: {value: 1, type: ZCL_UINT8}});
+            await ep.write('ld2450Config', {restart: 1});
             return {state: {restart: ''}};
         },
     },
@@ -408,7 +377,7 @@ const tzLocal = {
             meta.logger.warn('[ZB_LD2450] Factory reset triggered via Z2M');
             registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
-            await ep.write(CLUSTER_CONFIG_ID, {[ATTR.factoryReset]: {value: 0xFE, type: ZCL_UINT8}}, {disableDefaultResponse: true});
+            await ep.write('ld2450Config', {factoryReset: 0xFE}, {disableDefaultResponse: true});
         },
     },
 };
@@ -555,44 +524,33 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
         {attribute: 'occupancy', minimumReportInterval: 0,
          maximumReportInterval: 300, reportableChange: 0},
     ]);
-    await ep1.bind(CLUSTER_CONFIG_ID, coordinatorEndpoint);
+    await ep1.bind('ld2450Config', coordinatorEndpoint);
 
-    /* Read EP1 config attrs in two batches — 20 attrs in one frame exceeds ZCL frame limits.
-     * Batch 1: live data + writable config (~69-byte ZCL payload, safe)
-     * Batch 2: fallback timing + diagnostics (~51-byte ZCL payload, safe) */
-    try {
-        await ep1.read(CLUSTER_CONFIG_ID, [
-            ATTR.targetCount, ATTR.targetCoords, ATTR.maxDistance, ATTR.angleLeft, ATTR.angleRight,
-            ATTR.trackingMode, ATTR.coordPublishing, ATTR.occupancyCooldown, ATTR.occupancyDelay,
-            ATTR.fallbackMode, ATTR.fallbackCooldown, ATTR.fallbackEnable,
-        ]);
-    } catch (e) {
-        console.error(`[ZB_LD2450] EP1 batch1 read FAILED: ${e.message}`);
-    }
-    try {
-        await ep1.read(CLUSTER_CONFIG_ID, [
-            ATTR.hardTimeoutSec, ATTR.ackTimeoutMs, ATTR.heartbeatEnable, ATTR.heartbeatInterval,
-            ATTR.bootCount, ATTR.resetReason, ATTR.lastUptimeSec, ATTR.minFreeHeap,
-        ]);
-    } catch (e) {
-        console.error(`[ZB_LD2450] EP1 batch2 read FAILED: ${e.message}`);
-    }
+    /* Read all EP1 config attrs (zone config now lives on EP2-EP11) */
+    await ep1.read('ld2450Config', [
+        'targetCount', 'targetCoords', 'maxDistance', 'angleLeft', 'angleRight',
+        'trackingMode', 'coordPublishing', 'occupancyCooldown', 'occupancyDelay',
+        'fallbackMode', 'fallbackCooldown',
+        'fallbackEnable', 'hardTimeoutSec', 'ackTimeoutMs',
+        'heartbeatEnable', 'heartbeatInterval',
+        'bootCount', 'resetReason', 'lastUptimeSec', 'minFreeHeap',
+    ]);
 
     /* EPs 2-11: occupancy + per-zone config cluster */
     for (let n = 0; n < 10; n++) {
         const zoneEp = device.getEndpoint(n + 2);
-        const base = 0x0040 + n * 4;
-        try {
-            await zoneEp.bind('msOccupancySensing', coordinatorEndpoint);
-            await zoneEp.configureReporting('msOccupancySensing', [
-                {attribute: 'occupancy', minimumReportInterval: 0,
-                 maximumReportInterval: 300, reportableChange: 0},
-            ]);
-            await zoneEp.bind(CLUSTER_CONFIG_ID, coordinatorEndpoint);
-            await zoneEp.read(CLUSTER_CONFIG_ID, [base, base + 1, base + 2, base + 3]);
-        } catch (e) {
-            console.error(`[ZB_LD2450] Zone EP${n + 2} configure FAILED: ${e.message}`);
-        }
+        await zoneEp.bind('msOccupancySensing', coordinatorEndpoint);
+        await zoneEp.configureReporting('msOccupancySensing', [
+            {attribute: 'occupancy', minimumReportInterval: 0,
+             maximumReportInterval: 300, reportableChange: 0},
+        ]);
+        await zoneEp.bind('ld2450Config', coordinatorEndpoint);
+        await zoneEp.read('ld2450Config', [
+            `zone${n + 1}VertexCount`,
+            `zone${n + 1}Coords`,
+            `zone${n + 1}Cooldown`,
+            `zone${n + 1}Delay`,
+        ]);
     }
 }
 
@@ -630,10 +588,10 @@ const definition = {
         registerCustomClusters(device);
         const ep1 = device.getEndpoint(1);
         await configureBindingsAndReads(device, coordinatorEndpoint);
-        await ep1.configureReporting(CLUSTER_CONFIG_ID, [
-            {attribute: {ID: ATTR.targetCount,  type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
-            {attribute: {ID: ATTR.targetCoords, type: ZCL_CHAR_STR}, minimumReportInterval: 0, maximumReportInterval: 300},
-            {attribute: {ID: ATTR.fallbackMode, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+        await ep1.configureReporting('ld2450Config', [
+            {attribute: 'targetCount',  minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
+            {attribute: 'targetCoords', minimumReportInterval: 0, maximumReportInterval: 300},
+            {attribute: 'fallbackMode', minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
     },
 };
@@ -651,37 +609,36 @@ const definitionC6 = {
         const ep1 = device.getEndpoint(1);
         await configureBindingsAndReads(device, coordinatorEndpoint);
         /* Split into small batches to stay within ZCL frame size limits */
-        await ep1.configureReporting(CLUSTER_CONFIG_ID, [
-            {attribute: {ID: ATTR.targetCount,       type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
-            {attribute: {ID: ATTR.targetCoords,      type: ZCL_CHAR_STR}, minimumReportInterval: 0, maximumReportInterval: 300},
-            {attribute: {ID: ATTR.fallbackMode,      type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.maxDistance,       type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.angleLeft,         type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+        await ep1.configureReporting('ld2450Config', [
+            {attribute: 'targetCount',      minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
+            {attribute: 'targetCoords',     minimumReportInterval: 0, maximumReportInterval: 300},
+            {attribute: 'fallbackMode',     minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'maxDistance',      minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'angleLeft',        minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
-        await ep1.configureReporting(CLUSTER_CONFIG_ID, [
-            {attribute: {ID: ATTR.angleRight,        type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.trackingMode,      type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.coordPublishing,   type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.occupancyCooldown, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.occupancyDelay,    type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+        await ep1.configureReporting('ld2450Config', [
+            {attribute: 'angleRight',       minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'trackingMode',     minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'coordPublishing',  minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'occupancyCooldown',minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'occupancyDelay',   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
-        await ep1.configureReporting(CLUSTER_CONFIG_ID, [
-            {attribute: {ID: ATTR.fallbackEnable,    type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.fallbackCooldown,  type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.hardTimeoutSec,    type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.ackTimeoutMs,      type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.heartbeatEnable,   type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: {ID: ATTR.heartbeatInterval, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+        await ep1.configureReporting('ld2450Config', [
+            {attribute: 'fallbackEnable',   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'fallbackCooldown', minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'hardTimeoutSec',   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'ackTimeoutMs',     minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'heartbeatEnable',  minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: 'heartbeatInterval',minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
         /* Zone config attrs — each zone on its own EP, one call per EP */
         for (let n = 0; n < 10; n++) {
             const zoneEp = device.getEndpoint(n + 2);
-            const base = 0x0040 + n * 4;
-            await zoneEp.configureReporting(CLUSTER_CONFIG_ID, [
-                {attribute: {ID: base + 0, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-                {attribute: {ID: base + 1, type: ZCL_CHAR_STR}, minimumReportInterval: 0, maximumReportInterval: 3600},
-                {attribute: {ID: base + 2, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-                {attribute: {ID: base + 3, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            await zoneEp.configureReporting('ld2450Config', [
+                {attribute: `zone${n + 1}VertexCount`, minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+                {attribute: `zone${n + 1}Coords`,      minimumReportInterval: 0, maximumReportInterval: 3600},
+                {attribute: `zone${n + 1}Cooldown`,    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+                {attribute: `zone${n + 1}Delay`,       minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
             ]);
         }
     },
