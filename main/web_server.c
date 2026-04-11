@@ -18,6 +18,9 @@
 #include "ld2450.h"
 #include "zigbee_ota.h"
 #include "ota_check.h"
+#ifdef CONFIG_IDF_TARGET_ESP32C6
+extern esp_err_t ota_upload_transport_flash(httpd_req_t *req);
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -290,17 +293,8 @@ static esp_err_t handle_ws_targets(httpd_req_t *req)
                  httpd_req_to_sockfd(req));
         return ESP_OK;
     }
-    /* Push-only endpoint — drain any incoming frame and discard */
-    httpd_ws_frame_t frame = {};
-    esp_err_t err = httpd_ws_recv_frame(req, &frame, 0);
-    if (err == ESP_OK && frame.len) {
-        uint8_t *buf = calloc(1, frame.len);
-        if (buf) {
-            frame.payload = buf;
-            httpd_ws_recv_frame(req, &frame, frame.len);
-            free(buf);
-        }
-    }
+    /* Push-only endpoint — ESP-IDF handles close/ping frames internally.
+     * Nothing to do here; returning ESP_OK lets the httpd layer clean up. */
     return ESP_OK;
 }
 
@@ -368,7 +362,10 @@ static void ws_push_task(void *arg)
         };
         for (size_t i = 0; i < fds_count; i++) {
             if (httpd_ws_get_fd_info(s_server, fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
-                httpd_ws_send_frame_async(s_server, fds[i], &frame);
+                esp_err_t e = httpd_ws_send_frame_async(s_server, fds[i], &frame);
+                if (e != ESP_OK) {
+                    ESP_LOGD(TAG, "ws_push: send failed fd=%d (%s)", fds[i], esp_err_to_name(e));
+                }
             }
         }
         /* json[] remains on stack for the next 500ms delay — valid until the
@@ -599,7 +596,7 @@ static esp_err_t handle_get_status(httpd_req_t *req)
     }
 
     cJSON_AddStringToObject(root, "firmware",   FIRMWARE_VERSION_STRING);
-    cJSON_AddNumberToObject(root, "uptime_sec", (double)(esp_timer_get_time() / 1000000LL));
+    cJSON_AddNumberToObject(root, "uptime_sec", (double)(int64_t)(esp_timer_get_time() / 1000000LL));
     cJSON_AddNumberToObject(root, "free_heap",  (double)esp_get_free_heap_size());
 
     static const char *wifi_state_names[] = {
@@ -731,6 +728,58 @@ static esp_err_t handle_restart(httpd_req_t *req)
 }
 
 /* ================================================================== */
+/*  POST /api/ota/upload — receive .ota file, flash directly           */
+/* ================================================================== */
+
+static esp_err_t handle_ota_upload(httpd_req_t *req)
+{
+    #ifdef CONFIG_IDF_TARGET_ESP32C6
+    if (req->content_len == 0) {
+        cJSON *e = cJSON_CreateObject();
+        cJSON_AddStringToObject(e, "error", "no file");
+        send_json(req, 400, e);
+        cJSON_Delete(e);
+        return ESP_OK;
+    }
+    esp_err_t ret = ota_upload_transport_flash(req);
+    cJSON *resp = cJSON_CreateObject();
+    if (ret == ESP_OK) {
+        cJSON_AddStringToObject(resp, "status", "ok");
+        send_json(req, 200, resp);
+    } else if (ret == ESP_ERR_INVALID_STATE) {
+        cJSON_AddStringToObject(resp, "status", "error");
+        cJSON_AddStringToObject(resp, "error", "OTA already in progress");
+        send_json(req, 409, resp);
+    } else {
+        cJSON_AddStringToObject(resp, "status", "error");
+        cJSON_AddStringToObject(resp, "error", "flash failed");
+        send_json(req, 500, resp);
+    }
+    cJSON_Delete(resp);
+    #else
+    cJSON *e = cJSON_CreateObject();
+    cJSON_AddStringToObject(e, "error", "not supported on this target");
+    send_json(req, 501, e);
+    cJSON_Delete(e);
+    #endif
+    return ESP_OK;
+}
+
+/*  POST /api/zb-reset                                                 */
+/* ================================================================== */
+
+static esp_err_t handle_zb_reset(httpd_req_t *req)
+{
+    extern void zigbee_factory_reset(void);
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "status", "resetting");
+    send_json(req, 200, resp);
+    cJSON_Delete(resp);
+    vTaskDelay(pdMS_TO_TICKS(500));
+    zigbee_factory_reset();
+    return ESP_OK;
+}
+
 /*  POST /api/factory-reset                                            */
 /* ================================================================== */
 
@@ -954,8 +1003,10 @@ esp_err_t web_server_start(void)
         { .uri = "/api/wifi",            .method = HTTP_POST, .handler = handle_post_wifi      },
         { .uri = "/api/wifi-reset",      .method = HTTP_POST, .handler = handle_wifi_reset     },
         { .uri = "/api/restart",         .method = HTTP_POST, .handler = handle_restart        },
+        { .uri = "/api/zb-reset",        .method = HTTP_POST, .handler = handle_zb_reset       },
         { .uri = "/api/factory-reset",   .method = HTTP_POST, .handler = handle_factory_reset  },
         { .uri = "/api/ota",             .method = HTTP_POST, .handler = handle_post_ota          },
+        { .uri = "/api/ota/upload",      .method = HTTP_POST, .handler = handle_ota_upload        },
         { .uri = "/api/ota/status",      .method = HTTP_GET,  .handler = handle_get_ota_status    },
         { .uri = "/api/ota/check",       .method = HTTP_POST, .handler = handle_post_ota_check    },
         { .uri = "/api/ota/interval",    .method = HTTP_GET,  .handler = handle_get_ota_interval  },

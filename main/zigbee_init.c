@@ -441,6 +441,11 @@ static void zigbee_task(void *pv)
     );
     #if CONFIG_LD2450_ZB_ROUTER
     zb_cfg.nwk_cfg.zczr_cfg.max_children = 10;
+    #else
+    /* Non-sleepy end device: keep receiver on when idle so coordinator
+       can reach us for ZDO requests, binds, and attribute reads. */
+    zb_cfg.nwk_cfg.zed_cfg.ed_timeout  = ESP_ZB_ED_AGING_TIMEOUT_64MIN;
+    zb_cfg.nwk_cfg.zed_cfg.keep_alive  = 3000;
     #endif
 
     esp_zb_init(&zb_cfg);

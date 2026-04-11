@@ -180,6 +180,7 @@
         </div>
         <br>
         <button class="btn" onclick="doRestart()">↺ Restart Device</button>
+        <button class="btn" onclick="doZbReset()">⟳ Zigbee Reset</button>
         <button class="btn danger" onclick="doFactoryReset()">✕ Factory Reset</button>
 
         <div class="sec">Firmware Update</div>
@@ -192,6 +193,12 @@
         <br>
         <button class="btn" id="btn-ota-check" onclick="doOtaCheck()">↻ Check for Updates</button>
         <button class="btn primary" id="btn-ota-update" onclick="doOtaUpdate()" disabled>↑ Update Firmware</button>
+
+        <div class="sec">Manual Upload</div>
+        <div class="field">
+          <input type="file" id="inp-ota-file" accept=".ota" class="text-input">
+        </div>
+        <button class="btn" onclick="doOtaFileUpload()">↑ Upload &amp; Flash</button>
 
         <div class="sec">Update Check</div>
         <div class="field">

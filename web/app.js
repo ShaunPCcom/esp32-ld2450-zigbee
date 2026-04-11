@@ -273,7 +273,26 @@ function renderZoneDetail() {
       </div>
       <input type="range" id="z-fc" min="0" max="120" step="5" value="${z.fallback_cooldown_sec}">
     </div>
-    <div class="hint">Drag the blue vertex handles on the radar to reshape this zone.</div>
+    <div class="sec">Coordinates</div>
+    <div class="coord-grid" id="z-coord-grid">
+      ${parseCoords(z.coords).map((p, vi) => `
+        <div class="coord-row">
+          <span class="coord-lbl">V${vi + 1}</span>
+          <label class="coord-field">
+            <span class="coord-axis">X</span>
+            <input type="number" class="coord-inp" data-vi="${vi}" data-axis="x"
+              value="${(p.x / 1000).toFixed(3)}" step="0.001">
+            <span class="coord-unit">m</span>
+          </label>
+          <label class="coord-field">
+            <span class="coord-axis">Y</span>
+            <input type="number" class="coord-inp" data-vi="${vi}" data-axis="y"
+              value="${(p.y / 1000).toFixed(3)}" step="0.001" min="0">
+            <span class="coord-unit">m</span>
+          </label>
+        </div>`).join('')}
+    </div>
+    <div class="hint">Fine-tune vertex positions after drag-and-drop. Use the radar grid for alignment — changes apply immediately.</div>
     ` : `
     <div class="hint">Enable to activate this zone.<br>A default triangle will appear — drag its vertices on the radar to position it.</div>
     `}
@@ -322,6 +341,22 @@ function renderZoneDetail() {
     oz.coords = toCoords(pts);
     await saveAllZones();
     renderZoneDetail();
+  });
+
+  /* Coordinate inputs */
+  document.querySelectorAll('.coord-inp').forEach(inp => {
+    inp.addEventListener('change', async () => {
+      const vi   = Number(inp.dataset.vi);
+      const axis = inp.dataset.axis;
+      const mm   = Math.round(parseFloat(inp.value) * 1000);
+      if (isNaN(mm)) return;
+      const oz  = cfg.zones[activeZone];
+      const pts = parseCoords(oz.coords);
+      if (!pts[vi]) return;
+      pts[vi][axis] = axis === 'y' ? Math.max(0, mm) : mm;
+      oz.coords = toCoords(pts);
+      await saveAllZones();
+    });
   });
 
   /* Zone timing sliders */
@@ -459,6 +494,41 @@ function drawGrid() {
     ctx.fillStyle = 'rgba(62,102,80,.7)';
     ctx.fillText(dist_m + 'm', ox + 4, oy + r - 5);
   }
+
+  // Cartesian meter grid — X and Y lines at 1m intervals
+  const step = maxD <= 2000 ? 500 : 1000;
+  const [, bot] = mm2cv(0, maxD);
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 5]);
+
+  // Horizontal Y lines (depth reference, straight)
+  for (let y = step; y < maxD; y += step) {
+    const [, cy] = mm2cv(0, y);
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    ctx.lineTo(cvW, cy);
+    ctx.strokeStyle = 'rgba(30,80,48,.55)';
+    ctx.stroke();
+  }
+
+  // Vertical X lines (left/right reference) + labels
+  const maxX = Math.ceil((cvW / 2) / (step * (cvH - 56) / maxD)) * step;
+  ctx.font = '9px "Share Tech Mono",monospace';
+  ctx.textAlign = 'center';
+  for (let x = -maxX; x <= maxX; x += step) {
+    if (x === 0) continue;
+    const [cx] = mm2cv(x, 0);
+    if (cx < 0 || cx > cvW) continue;
+    ctx.beginPath();
+    ctx.moveTo(cx, oy);
+    ctx.lineTo(cx, bot);
+    ctx.strokeStyle = 'rgba(30,80,48,.55)';
+    ctx.stroke();
+    const label = (x > 0 ? '+' : '') + (x / 1000).toFixed(step < 1000 ? 1 : 0) + 'm';
+    ctx.fillStyle = 'rgba(62,102,80,.95)';
+    ctx.fillText(label, cx, oy + 12);
+  }
+  ctx.setLineDash([]);
 
   // Center axis
   const [, ty] = mm2cv(0, maxD);
@@ -662,24 +732,28 @@ function onMove([cx, cy]) {
 
 function onUp() {
   if (!drag) return;
-  const zi = drag.zi;
   drag = null;
   saveAllZones();
+  if (editMode) renderZoneDetail();
 }
 
 /* ─────────────────────────────────────────────────────────────
    WebSocket
 ───────────────────────────────────────────────────────────── */
+let wsLastMsg = 0;
+
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/ws/targets`);
 
   ws.onopen = () => {
+    wsLastMsg = Date.now();
     document.getElementById('ws-dot').classList.add('live');
     document.getElementById('ws-label').textContent = 'live';
   };
 
   ws.onmessage = e => {
+    wsLastMsg = Date.now();
     try {
       const d = JSON.parse(e.data);
       live.t   = d.t  || [];
@@ -703,6 +777,16 @@ function connectWS() {
 
   ws.onerror = () => ws.close();
 }
+
+/* Watchdog: if the socket appears open but no message for >3 s,
+ * the TCP connection has gone half-open. Force-close to trigger
+ * the onclose → reconnect path. */
+setInterval(() => {
+  if (ws && ws.readyState === WebSocket.OPEN && wsLastMsg > 0
+      && (Date.now() - wsLastMsg) > 3000) {
+    ws.close();
+  }
+}, 2000);
 
 /* ─────────────────────────────────────────────────────────────
    Actions
@@ -815,6 +899,32 @@ async function doRestart() {
   if (!confirm('Restart the device?')) return;
   await fetch('/api/restart', { method: 'POST' });
   toast('RESTARTING…', 'ok');
+}
+
+async function doOtaFileUpload() {
+  const inp = document.getElementById('inp-ota-file');
+  if (!inp || !inp.files[0]) { toast('SELECT A FILE FIRST', 'err'); return; }
+  const file = inp.files[0];
+  if (!confirm(`Flash ${file.name} (${(file.size / 1024).toFixed(0)} KB)? Device will reboot.`)) return;
+  toast('UPLOADING…', 'ok');
+  try {
+    const r = await fetch('/api/ota/upload', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body:    file,
+    });
+    if (r.ok)                 toast('FLASHED — REBOOTING…', 'ok');
+    else if (r.status === 409) toast('OTA ALREADY IN PROGRESS', 'err');
+    else                       toast('UPLOAD FAILED', 'err');
+  } catch (e) {
+    toast('UPLOAD FAILED', 'err');
+  }
+}
+
+async function doZbReset() {
+  if (!confirm('Reset Zigbee stack? Device config and zone coordinates will be kept.')) return;
+  await fetch('/api/zb-reset', { method: 'POST' });
+  toast('ZIGBEE RESET…', 'ok');
 }
 
 async function doFactoryReset() {

@@ -80,7 +80,11 @@ extern "C" void app_main(void)
     /* Initialize board LED (C++ BoardLed class) */
     g_board_led = new BoardLed(BOARD_LED_GPIO);
     g_board_led->set_state(BoardLed::State::NOT_JOINED);
-    ESP_LOGI(TAG, "Zigbee role: %s", CONFIG_LD2450_ZB_ROUTER ? "router" : "end device");
+    #if CONFIG_LD2450_ZB_ROUTER
+    ESP_LOGI(TAG, "Zigbee role: router");
+    #else
+    ESP_LOGI(TAG, "Zigbee role: end device");
+    #endif
 
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {

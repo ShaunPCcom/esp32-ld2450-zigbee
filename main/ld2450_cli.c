@@ -732,6 +732,13 @@ static void cli_task(void *arg)
                 continue;
             }
 
+            if (strcmp(cmd, "zb-reset") == 0) {
+                printf("Zigbee network reset: clearing Zigbee stack state, keeping device config...\n");
+                fflush(stdout);
+                vTaskDelay(pdMS_TO_TICKS(100));
+                zigbee_factory_reset();
+            }
+
             if (strcmp(cmd, "factory-reset") == 0) {
                 printf("FULL FACTORY RESET: Erasing Zigbee network + NVS config...\n");
                 fflush(stdout);

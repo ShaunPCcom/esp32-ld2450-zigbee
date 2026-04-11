@@ -12,3 +12,8 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 #
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+#
+# Zigbee role: Router (H2 is dedicated 802.15.4, no coexistence issues)
+#
+CONFIG_LD2450_ZB_ROUTER=y

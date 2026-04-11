@@ -30,6 +30,11 @@ CONFIG_ESP_COEX_ENABLED=y
 CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
 
 #
+# Zigbee role: End Device (router mode is unstable with WiFi coexistence on C6)
+#
+CONFIG_LD2450_ZB_ROUTER=n
+
+#
 # Flash chip support (nanoESP32-C6 uses Boya flash)
 #
 CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
