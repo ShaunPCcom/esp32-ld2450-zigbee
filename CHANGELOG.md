@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.3.1 - 2026-04-11
+
+### Fixes
+- **Web UI not updating via OTA**: `app.js`, `style.css`, and `index.html` were stored in a separate SPIFFS partition that OTA never touched — devices would run new firmware with the old UI indefinitely. All three files are now compiled directly into the firmware binary, so every OTA update carries the current web UI automatically.
+
+---
+
 ## v2.3.0 - 2026-04-11
 
 ### Features
