@@ -190,6 +190,8 @@ When a new version is available, Home Assistant shows an update notification via
 
 The device checks for updates every 12 hours by default. On C6 the interval is configurable (1–72 hours) in the System tab of the web UI. Trigger a manual check from the Z2M OTA section or the web UI.
 
+> **C6 OTA channel note**: When Z2M triggers an update on the C6, the Zigbee notification is used only as a signal — the Zigbee OTA protocol does not carry a download URL, so the device has no way to know what image Z2M intended to send. The C6 always fetches from its own internal OTA index URL (configurable in System → OTA Index URL). If Z2M is pointed at a beta OTA index but the device's internal URL points to stable, the device will download the latest stable release — not the beta Z2M advertised, and vice versa. To keep them in sync, set the device's OTA index URL to match whatever channel Z2M is using. Manual upload bypasses this entirely.
+
 **Manual upload (C6 only)**: Download the `.ota` file from the [GitHub Releases page](https://github.com/ShaunPCcom/ESP32-H2-LD2450/releases), open the web UI, go to System → Manual Upload, select the file, and click "Upload & Flash". The device flashes and reboots automatically — no Z2M or network update path required.
 
 ### Hosting and Releases
