@@ -23,14 +23,14 @@ dependencies:
     version: "main"
 
   board_led:
-    git: https://github.com/ShaunPCcom/esp32-zigbee-common.git
+    git: https://github.com/ShaunPCcom/esp32-common.git
     path: board_led
     version: "master"
   zigbee_core:
-    git: https://github.com/ShaunPCcom/esp32-zigbee-common.git
+    git: https://github.com/ShaunPCcom/esp32-common.git
     path: zigbee_core
     version: "master"
   crash_diag:
-    git: https://github.com/ShaunPCcom/esp32-zigbee-common.git
+    git: https://github.com/ShaunPCcom/esp32-common.git
     path: crash_diag
     version: "master"

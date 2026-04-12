@@ -522,7 +522,7 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
     await ep1.bind('msOccupancySensing', coordinatorEndpoint);
     await ep1.configureReporting('msOccupancySensing', [
         {attribute: 'occupancy', minimumReportInterval: 0,
-         maximumReportInterval: 300, reportableChange: 0},
+         maximumReportInterval: 30, reportableChange: 0},
     ]);
     await ep1.bind('ld2450Config', coordinatorEndpoint);
 
@@ -548,7 +548,7 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
         await zoneEp.bind('msOccupancySensing', coordinatorEndpoint);
         await zoneEp.configureReporting('msOccupancySensing', [
             {attribute: 'occupancy', minimumReportInterval: 0,
-             maximumReportInterval: 300, reportableChange: 0},
+             maximumReportInterval: 30, reportableChange: 0},
         ]);
         await zoneEp.bind('ld2450Config', coordinatorEndpoint);
         await zoneEp.read('ld2450Config', [
