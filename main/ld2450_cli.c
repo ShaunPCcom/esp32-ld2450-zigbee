@@ -70,7 +70,8 @@ static void print_help(void)
         "  ld fallback cooldown zone <1-10> <sec>\n"
         "  ld fallback cooldown all <sec>\n"
         "  ld config\n"
-        "  ld diag                      (show crash diagnostics)\n"
+        "  ld diag [show]               (show crash diagnostics)\n"
+        "  ld diag reset                (reset boot counter to 0)\n"
         "  ld nvs                       (test NVS health)\n"
         "  ld reboot\n"
         "  ld factory-reset             (FULL reset: erase Zigbee + config)\n"
@@ -226,7 +227,15 @@ static void cli_task(void *arg)
             if (strcmp(cmd, "help") == 0) { print_help(); continue; }
             if (strcmp(cmd, "state") == 0) { print_state(); continue; }
             if (strcmp(cmd, "config") == 0) { print_config(); continue; }
-            if (strcmp(cmd, "diag") == 0) { print_diag(); continue; }
+            if (strcmp(cmd, "diag") == 0) {
+                char *sub = strtok(NULL, " \t\r\n");
+                if (!sub || strcmp(sub, "show") == 0) { print_diag(); }
+                else if (strcmp(sub, "reset") == 0) {
+                    crash_diag_reset_boot_count();
+                    printf("Boot count reset to 0\n");
+                } else { printf("usage: ld diag [show|reset]\n"); }
+                continue;
+            }
 
             if (strcmp(cmd, "en") == 0) {
                 char *v = strtok(NULL, " \t\r\n");

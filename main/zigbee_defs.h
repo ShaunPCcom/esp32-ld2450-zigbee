@@ -33,6 +33,7 @@
 #define ZB_ATTR_RESET_REASON           0x0031  /* U8, read-only (last reset cause) */
 #define ZB_ATTR_LAST_UPTIME_SEC        0x0032  /* U32, read-only (uptime before last reset) */
 #define ZB_ATTR_MIN_FREE_HEAP          0x0033  /* U32, read-only (min free heap since boot) */
+#define ZB_ATTR_DIAG_RESET             0x0034  /* U8, write-only (write non-zero to reset boot counter) */
 
 /* ZB_ATTR_RESTART (0x00F0) and ZB_ATTR_FACTORY_RESET (0x00F1) defined in zigbee_ctrl.h */
 

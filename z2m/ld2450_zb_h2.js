@@ -63,6 +63,7 @@ const ld2450ConfigCluster = {
         resetReason:          {ID: 0x0031, type: ZCL_UINT8,    report: false},
         lastUptimeSec:        {ID: 0x0032, type: ZCL_UINT32,   report: false},
         minFreeHeap:          {ID: 0x0033, type: ZCL_UINT32,   report: false},
+        diagReset:            {ID: 0x0034, type: ZCL_UINT8,    write: true},
         restart:              {ID: 0x00F0, type: ZCL_UINT8,    write: true},
         factoryReset:         {ID: 0x00F1, type: ZCL_UINT8,    write: true},
         ...zoneConfigAttrs,
@@ -357,6 +358,18 @@ const tzLocal = {
         },
     },
 
+    diag_reset: {
+        key: ['diag_reset_boot_count'],
+        convertSet: async (entity, key, value, meta) => {
+            if (!value) return;
+            registerCustomClusters(meta.device);
+            const ep = meta.device.getEndpoint(1);
+            await ep.write('ld2450Config', {diagReset: 1});
+            meta.logger.info('[ZB_LD2450] Boot count reset triggered');
+            return {state: {diag_reset_boot_count: false}};
+        },
+    },
+
     restart: {
         key: ['restart'],
         convertSet: async (entity, key, value, meta) => {
@@ -506,6 +519,9 @@ const exposesDefinition = [
     numericExpose('min_free_heap', 'Min free heap', ACCESS_STATE,
         'Minimum free heap memory since boot', {unit: 'bytes'}),
 
+    binaryExpose('diag_reset_boot_count', 'Reset boot count', ACCESS_SET, true, false,
+        'Write true to reset the boot counter to 0'),
+
     enumExpose('restart', 'Restart', ACCESS_SET, ['restart'],
         'Restart the device'),
 
@@ -565,7 +581,7 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
 const sharedBase = {
     vendor: 'LD2450Z',
     fromZigbee: [fzLocal.occupancy, fzLocal.config],
-    toZigbee: [tzLocal.config, tzLocal.restart, tzLocal.factory_reset],
+    toZigbee: [tzLocal.config, tzLocal.diag_reset, tzLocal.restart, tzLocal.factory_reset],
     exposes: exposesDefinition,
     ota: true,
     meta: {

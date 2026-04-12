@@ -127,7 +127,7 @@ extern "C" void app_main(void)
      *   Operational mode  — credentials present: Zigbee + WiFi STA (coex works). */
     esp_netif_init();
     esp_event_loop_create_default();
-    wifi_manager_init();
+    wifi_manager_init("ld2450");
 
     if (wifi_manager_has_credentials()) {
         ESP_LOGI(TAG, "Credentials found — operational mode: Zigbee + WiFi STA");

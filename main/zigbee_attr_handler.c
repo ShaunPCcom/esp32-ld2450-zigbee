@@ -7,6 +7,7 @@
 
 /* Project */
 #include "config_api.h"
+#include "crash_diag.h"
 #include "ld2450_zone_csv.h"
 #include "nvs_config.h"
 #include "zigbee_attr_handler.h"
@@ -62,6 +63,9 @@ static esp_err_t handle_set_attr_value(const esp_zb_zcl_set_attr_value_message_t
             return config_api_set_hard_timeout(*(uint8_t *)val);
         case ZB_ATTR_ACK_TIMEOUT_MS:
             return config_api_set_ack_timeout(*(uint16_t *)val);
+        case ZB_ATTR_DIAG_RESET:
+            if (*(uint8_t *)val) crash_diag_reset_boot_count();
+            return ESP_OK;
         case ZB_ATTR_RESTART:
             zgb_ctrl_handle_restart();
             return ESP_OK;

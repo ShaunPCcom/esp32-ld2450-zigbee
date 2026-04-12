@@ -148,6 +148,12 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
         ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING,
         &diag.min_free_heap);
 
+    static uint8_t s_diag_reset_attr = 0;
+    esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_DIAG_RESET,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_WRITE_ONLY,
+        &s_diag_reset_attr);
+
     esp_zb_custom_cluster_add_custom_attr(custom, ZB_ATTR_RESTART,
         ESP_ZB_ZCL_ATTR_TYPE_U8,
         ESP_ZB_ZCL_ATTR_ACCESS_WRITE_ONLY,

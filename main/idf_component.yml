@@ -34,3 +34,15 @@ dependencies:
     git: https://github.com/ShaunPCcom/esp32-common.git
     path: crash_diag
     version: "master"
+  wifi_manager:
+    git: https://github.com/ShaunPCcom/esp32-common.git
+    path: wifi_manager
+    version: "master"
+  ota_check:
+    git: https://github.com/ShaunPCcom/esp32-common.git
+    path: ota_check
+    version: "master"
+  web_server_base:
+    git: https://github.com/ShaunPCcom/esp32-common.git
+    path: web_server_base
+    version: "master"
