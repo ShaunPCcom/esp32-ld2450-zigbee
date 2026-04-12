@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.3.2 - 2026-04-12
+
+### Fixes
+- **Web UI broken after v2.3.1 OTA**: Serving files directly from embedded binary data caused a JS parse failure (trailing null byte appended by the build system). Reverted to SPIFFS-based serving. Web assets are still compiled into the firmware binary — on first boot after an OTA update the device detects the version mismatch and copies the embedded files to SPIFFS before starting the web server.
+
+---
+
 ## v2.3.1 - 2026-04-11
 
 ### Fixes
