@@ -361,12 +361,11 @@ const tzLocal = {
     diag_reset: {
         key: ['diag_reset_boot_count'],
         convertSet: async (entity, key, value, meta) => {
-            if (!value) return;
             registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
             await ep.write('ld2450Config', {diagReset: 1});
             meta.logger.info('[ZB_LD2450] Boot count reset triggered');
-            return {state: {diag_reset_boot_count: false}};
+            return {state: {diag_reset_boot_count: ''}};
         },
     },
 
@@ -519,8 +518,8 @@ const exposesDefinition = [
     numericExpose('min_free_heap', 'Min free heap', ACCESS_STATE,
         'Minimum free heap memory since boot', {unit: 'bytes'}),
 
-    binaryExpose('diag_reset_boot_count', 'Reset boot count', ACCESS_SET, true, false,
-        'Write true to reset the boot counter to 0'),
+    enumExpose('diag_reset_boot_count', 'Reset boot count', ACCESS_SET, ['Reset'],
+        'Reset the boot counter to 0'),
 
     enumExpose('restart', 'Restart', ACCESS_SET, ['restart'],
         'Restart the device'),
