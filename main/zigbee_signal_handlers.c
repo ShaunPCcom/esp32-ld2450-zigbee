@@ -61,6 +61,12 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
                 s_network_joined = true;
                 zigbee_sync_zone_attrs_from_nvs();
                 sensor_bridge_start();
+#if CONFIG_IDF_TARGET_ESP32C6
+                /* C6 runs as End Device — unlike a Router it sends no routing
+                 * announcements on boot, so Z2M won't detect the device is back
+                 * without an explicit ZDO Device_annce broadcast. */
+                esp_zb_zdo_device_announcement_req();
+#endif
             }
         } else {
             ESP_LOGW(TAG, "Device start/reboot failed: %s", esp_err_to_name(status));
