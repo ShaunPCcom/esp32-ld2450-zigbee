@@ -23,6 +23,7 @@
 #include "zigbee_defs.h"
 #include "zigbee_init.h"
 #include "zigbee_ota.h"
+#include "zigbee_signal_handlers.h"
 
 static const char *TAG = "zigbee_init";
 
@@ -524,5 +525,6 @@ void zigbee_init(void)
     ESP_LOGI(TAG, "LD2450 Firmware Version: v" ZB_FW_VERSION_STR);
     ESP_LOGI(TAG, "========================================");
     ESP_LOGI(TAG, "Starting Zigbee task...");
+    zigbee_signal_handlers_setup();
     xTaskCreate(zigbee_task, "zb_task", 8192, NULL, 5, NULL);
 }

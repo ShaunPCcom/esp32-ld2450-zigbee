@@ -1,45 +1,30 @@
 // SPDX-License-Identifier: MIT
+/**
+ * @file zigbee_signal_handlers.h
+ * @brief LD2450-specific Zigbee lifecycle hook registration.
+ *
+ * The common network lifecycle handler (esp_zb_app_signal_handler,
+ * zigbee_factory_reset, zigbee_full_factory_reset, reboot_cb, etc.) is
+ * provided by the shared zigbee_signal_handler component. This header
+ * re-exports those declarations and adds the LD2450 setup function.
+ */
+
 #pragma once
 
-#include <stdbool.h>
-#include "esp_zigbee_core.h"
+#include "zigbee_signal_handler.h"  /* re-exports common API */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @brief Zigbee application signal handler
+ * @brief Register LD2450-specific Zigbee lifecycle hooks.
  *
- * Called by Zigbee stack for network lifecycle events.
- * Handles steering, join, leave, factory reset signals.
- *
- * @param signal_struct Signal data from stack
+ * Must be called before the Zigbee stack starts (i.e. before zigbee_init()).
+ * Registers on_joined and on_unhandled_signal callbacks and the NVS namespace
+ * for full factory reset.
  */
-void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct);
-
-/**
- * @brief Check if device has joined a Zigbee network
- *
- * @return true if joined, false otherwise
- */
-bool zigbee_is_network_joined(void);
-
-/**
- * @brief Zigbee network reset only
- *
- * Leaves network and erases Zigbee network data, but keeps NVS config.
- * Device restarts after reset.
- */
-void zigbee_factory_reset(void);
-
-/**
- * @brief Full factory reset
- *
- * Erases both Zigbee network data AND NVS application config.
- * Device restarts with default settings.
- */
-void zigbee_full_factory_reset(void);
+void zigbee_signal_handlers_setup(void);
 
 #ifdef __cplusplus
 }
