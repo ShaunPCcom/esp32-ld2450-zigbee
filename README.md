@@ -1,12 +1,12 @@
-# LD2450-ZB-H2
+# esp32-ld2450-zigbee
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
 
-A Zigbee presence sensor built on the ESP32-H2 and HLK-LD2450 24GHz mmWave radar. It tracks up to 3 people simultaneously, reports their positions, and lets you define **10 custom polygon zones** for room-level presence detection — all integrated into Home Assistant via Zigbee2MQTT.
+A Zigbee presence sensor for the HLK-LD2450 24GHz mmWave radar. Builds for two targets: **ESP32-H2** (pure Zigbee mesh router, no WiFi) and **ESP32-C6** (Zigbee end device with WiFi, web UI, and Wi-Fi OTA). Tracks up to 3 people simultaneously, reports their positions, and lets you define **10 custom polygon zones** for room-level presence detection — all integrated into Home Assistant via Zigbee2MQTT.
 
-This is a native Zigbee alternative to ESPHome-based LD2450 implementations. ESP32-H2 requires no WiFi, no cloud — just mesh networking that works with any Zigbee coordinator.
+A native Zigbee alternative to ESPHome-based LD2450 implementations.
 
 **Based on**: [TillFleisch/ESPHome-HLK-LD2450](https://github.com/TillFleisch/ESPHome-HLK-LD2450) — UART protocol implementation derived from this ESPHome component (MIT License). Reimplemented in C for ESP-IDF with Zigbee support and multi-zone architecture.
 
@@ -112,7 +112,7 @@ Both versions support: occupancy detection (overall + per-zone), target count, m
 
 ```bash
 git clone <repository-url>
-cd ld2450_zb_h2
+cd esp32_ld2450_zigbee
 
 # Set up ESP-IDF environment
 . $HOME/esp/esp-idf/export.sh
@@ -192,11 +192,11 @@ The device checks for updates every 12 hours by default. On C6 the interval is c
 
 > **C6 OTA channel note**: When Z2M triggers an update on the C6, the Zigbee notification is used only as a signal — the Zigbee OTA protocol does not carry a download URL, so the device has no way to know what image Z2M intended to send. The C6 always fetches from its own internal OTA index URL (configurable in System → OTA Index URL). If Z2M is pointed at a beta OTA index but the device's internal URL points to stable, the device will download the latest stable release — not the beta Z2M advertised, and vice versa. To keep them in sync, set the device's OTA index URL to match whatever channel Z2M is using. Manual upload bypasses this entirely.
 
-**Manual upload (C6 only)**: Download the `.ota` file from the [GitHub Releases page](https://github.com/ShaunPCcom/ESP32-H2-LD2450/releases), open the web UI, go to System → Manual Upload, select the file, and click "Upload & Flash". The device flashes and reboots automatically — no Z2M or network update path required.
+**Manual upload (C6 only)**: Download the `.ota` file from the [GitHub Releases page](https://github.com/ShaunPCcom/esp32-ld2450-zigbee/releases), open the web UI, go to System → Manual Upload, select the file, and click "Upload & Flash". The device flashes and reboots automatically — no Z2M or network update path required.
 
 ### Hosting and Releases
 
-Firmware releases are on the [GitHub Releases page](https://github.com/ShaunPCcom/ESP32-H2-LD2450/releases). Z2M checks the OTA index automatically.
+Firmware releases are on the [GitHub Releases page](https://github.com/ShaunPCcom/esp32-ld2450-zigbee/releases). Z2M checks the OTA index automatically.
 
 Releases are fully automated via GitHub Actions — tagging a new version triggers the build, creates the OTA image, publishes the release, and updates the OTA index. See `.github/RELEASE.md` for details.
 
@@ -410,7 +410,7 @@ The built-in LED on GPIO8 shows the current connection state:
 | **Green solid** | Joined and operational |
 | **Red blink** | Error or factory reset in progress |
 
-**Note**: This requires an addressable RGB LED (WS2812) on GPIO8 — standard on most ESP32-H2 DevKits. If your board has a simple single-colour LED, you'll see blink patterns instead of colour changes.
+**Note**: This requires an addressable RGB LED (WS2812) on GPIO8 — standard on both the ESP32-H2 DevKit and nanoESP32-C6. If your board has a simple single-colour LED, you'll see blink patterns instead of colour changes.
 
 ## Factory Reset
 
