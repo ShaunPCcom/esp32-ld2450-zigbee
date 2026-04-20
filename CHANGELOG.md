@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.4.1 - 2026-04-20
+
+### Fixes
+- **Reset boot count is now a select**: `diag_reset_boot_count` changed from a binary
+  to a Select with a single `Reset` option. This matches how Z2M handles one-shot
+  actions. Any automation that wrote `true`/`false` to this entity will need updating.
+
+---
+
 ## v2.4.0 - 2026-04-14
 
 ### Features

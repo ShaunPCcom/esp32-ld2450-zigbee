@@ -256,6 +256,7 @@ Each of the 10 zones has:
 
 | Entity | Type | Description |
 |--------|------|-------------|
+| `diag_reset_boot_count` | Select | Set to `Reset` to clear the boot counter to 0 |
 | `restart` | Select | Set to `restart` to reboot the device |
 | `factory_reset_confirm` | Text | Type `factory-reset` exactly to wipe everything |
 | `heartbeat` | Select | Set to `ping` to send a manual heartbeat |
