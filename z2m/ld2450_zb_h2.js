@@ -245,7 +245,7 @@ const tzLocal = {
                         await zoneEp.write('ld2450Config', {[`zone${z}Coords`]: metresCsvToMm(metresCoords)});
                         stateUpdate[coordsKey] = metresCoords;
                     } catch (e) {
-                        meta.logger.warn(`[ZB_LD2450] Coords resize failed: ${e.message}`);
+                        console.warn(`[ZB_LD2450] Coords resize failed: ${e.message}`);
                     }
                 } else {
                     /* Zone disabled — clear cached coords in Z2M state */
@@ -364,7 +364,7 @@ const tzLocal = {
             registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
             await ep.write('ld2450Config', {diagReset: 1});
-            meta.logger.info('[ZB_LD2450] Boot count reset triggered');
+            console.info('[ZB_LD2450] Boot count reset triggered');
             return {state: {diag_reset_boot_count: ''}};
         },
     },
@@ -383,10 +383,10 @@ const tzLocal = {
         key: ['factory_reset_confirm'],
         convertSet: async (entity, key, value, meta) => {
             if (value !== 'factory-reset') {
-                meta.logger.warn('[ZB_LD2450] Factory reset not triggered: type "factory-reset" to confirm');
+                console.warn('[ZB_LD2450] Factory reset not triggered: type "factory-reset" to confirm');
                 return;
             }
-            meta.logger.warn('[ZB_LD2450] Factory reset triggered via Z2M');
+            console.warn('[ZB_LD2450] Factory reset triggered via Z2M');
             registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
             await ep.write('ld2450Config', {factoryReset: 0xFE}, {disableDefaultResponse: true});
