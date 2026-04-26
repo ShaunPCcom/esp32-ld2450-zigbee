@@ -16,6 +16,8 @@
 #include "config_api.h"
 #include "sensor_bridge.h"
 #include "version.h"
+#include "zigbee_ota.h"
+#include "ota_check.h"
 
 #include "cJSON.h"
 #include "esp_http_server.h"
@@ -163,6 +165,7 @@ static esp_err_t handle_post_config(httpd_req_t *req)
     cJSON_AddStringToObject(resp, "status", "ok");
     send_json(req, 200, resp);
     cJSON_Delete(resp);
+    web_server_base_sse_notify("config");
     return ESP_OK;
 }
 
@@ -242,6 +245,46 @@ static void ws_push_task(void *arg)
 }
 
 /* ================================================================== */
+/*  SSE — OTA status callback + serializer                            */
+/* ================================================================== */
+
+static void ota_status_cb(zigbee_ota_status_t status, uint8_t pct)
+{
+    (void)pct;
+    if (status == ZIGBEE_OTA_STATUS_START   ||
+        status == ZIGBEE_OTA_STATUS_SUCCESS  ||
+        status == ZIGBEE_OTA_STATUS_FAILED)
+        web_server_base_sse_notify("ota");
+}
+
+static int ld2450_sse_serialize(const char *topic, char *buf, size_t buf_len)
+{
+    cJSON *json = NULL;
+    if (strcmp(topic, "config") == 0) {
+        config_api_get_all(&json);
+    } else if (strcmp(topic, "ota") == 0) {
+        const char *plain = FIRMWARE_VERSION_STRING;
+        if (plain[0] == 'v') plain++;
+        json = cJSON_CreateObject();
+        cJSON_AddBoolToObject  (json, "available",   ota_check_available());
+        cJSON_AddStringToObject(json, "current",     plain);
+        cJSON_AddStringToObject(json, "latest",      ota_check_latest_version());
+        cJSON_AddBoolToObject  (json, "in_progress", zigbee_ota_is_in_progress());
+    } else {
+        return -1;
+    }
+    if (!json) return -1;
+    char *str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    if (!str) return -1;
+    size_t len = strlen(str);
+    if (len >= buf_len) { free(str); return -1; }
+    memcpy(buf, str, len);
+    free(str);
+    return (int)len;
+}
+
+/* ================================================================== */
 /*  Public API                                                         */
 /* ================================================================== */
 
@@ -269,6 +312,10 @@ esp_err_t web_server_start(void)
     web_server_base_register("/ws/targets",   HTTP_GET,  handle_ws_targets,  true);
 
     xTaskCreate(ws_push_task, "ws_push", 4096, NULL, 4, NULL);
+
+    static const char *const sse_topics[] = {"config", "ota", NULL};
+    web_server_base_sse_register("/api/events", sse_topics, ld2450_sse_serialize);
+    zigbee_ota_register_status_callback(ota_status_cb);
 
     return ESP_OK;
 }
