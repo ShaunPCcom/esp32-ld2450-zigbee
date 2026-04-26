@@ -814,15 +814,35 @@ function applyOtaStatus(d) {
     updateBtn.disabled   = !avail;
     document.body.classList.toggle('has-update', !!avail);
     document.body.classList.remove('updating-firmware');
-    if (barText) barText.textContent = '\u2191 FIRMWARE UPDATE AVAILABLE \u2014 CLICK TO UPDATE';
+    if (barText && avail) barText.textContent = '\u2191 FIRMWARE UPDATE AVAILABLE \u2014 CLICK TO UPDATE';
   }
 }
+
+let s_otaPollFast = null;
 
 async function loadOtaStatus() {
   try {
     const r = await fetch('/api/ota/status');
     if (!r.ok) return;
-    applyOtaStatus(await r.json());
+    const d = await r.json();
+    applyOtaStatus(d);
+    if (d.in_progress && !s_otaPollFast) {
+      s_otaPollFast = setInterval(async () => {
+        try {
+          const r2 = await fetch('/api/ota/status');
+          if (!r2.ok) return;
+          const d2 = await r2.json();
+          applyOtaStatus(d2);
+          if (!d2.in_progress) {
+            clearInterval(s_otaPollFast);
+            s_otaPollFast = null;
+          }
+        } catch (e) {}
+      }, 5000);
+    } else if (!d.in_progress && s_otaPollFast) {
+      clearInterval(s_otaPollFast);
+      s_otaPollFast = null;
+    }
   } catch (e) {}
 }
 
@@ -850,6 +870,7 @@ async function doOtaUpdate() {
     if (r.status === 202) {
       toast('UPDATE STARTED\u2026', 'ok');
       applyOtaStatus({ in_progress: true });
+      loadOtaStatus();
     } else if (r.status === 409) {
       toast('UPDATE ALREADY IN PROGRESS', 'err');
     } else {
