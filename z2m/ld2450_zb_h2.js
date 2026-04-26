@@ -535,10 +535,9 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
     const ep1 = device.getEndpoint(1);
 
     await ep1.bind('msOccupancySensing', coordinatorEndpoint);
-    await ep1.configureReporting('msOccupancySensing', [
-        {attribute: 'occupancy', minimumReportInterval: 0,
-         maximumReportInterval: 30, reportableChange: 0},
-    ]);
+    /* No configureReporting for msOccupancySensing: firmware owns all occupancy
+     * reports via explicit ACK-tracked sends with retry (coordinator_fallback). */
+    await ep1.read('msOccupancySensing', ['occupancy']);
     await ep1.bind('ld2450Config', coordinatorEndpoint);
 
     /* Read EP1 config attrs in small batches to avoid ZCL INSUFFICIENT_SPACE */
@@ -561,10 +560,7 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
     for (let n = 0; n < 10; n++) {
         const zoneEp = device.getEndpoint(n + 2);
         await zoneEp.bind('msOccupancySensing', coordinatorEndpoint);
-        await zoneEp.configureReporting('msOccupancySensing', [
-            {attribute: 'occupancy', minimumReportInterval: 0,
-             maximumReportInterval: 30, reportableChange: 0},
-        ]);
+        await zoneEp.read('msOccupancySensing', ['occupancy']);
         await zoneEp.bind('ld2450Config', coordinatorEndpoint);
         await zoneEp.read('ld2450Config', [
             `zone${n + 1}VertexCount`,

@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.5.0 - 2026-04-25
+
+### Features
+- **ACK-tracked occupancy reports with retry**: Occupancy state changes are now
+  sent as explicit ZCL reports with APS acknowledgement tracking. If the coordinator
+  doesn't ACK, the firmware retries up to three times at 250 ms / 500 ms / 1 s
+  before escalating to the existing soft fallback chain. This replaces the
+  send-and-forget ZBoss auto-reporting path.
+- **Firmware-side 5-minute keep-alive**: Every 5 minutes the firmware enqueues a
+  full-state occupancy burst for all 11 endpoints, so Z2M always has a current
+  snapshot even with no motion. Reports are coalesced — a recent state-change
+  report for a given endpoint suppresses the keep-alive report for that endpoint.
+- **Occupancy read on pair**: Z2M now reads current occupancy from all 11 endpoints
+  during the configure phase, so entities are populated immediately after pairing
+  rather than showing null until the first motion event.
+
+### Fixes
+- **NVS reporting info crash on existing devices**: Calling `esp_zb_zcl_stop_attr_reporting`
+  or `esp_zb_zcl_find_reporting_info` on a device whose NVS reporting table was written
+  by a previous firmware version could leave the linked list in a corrupt state,
+  causing a load-access fault on the next boot. The disable-autoreport path has been
+  removed entirely; the firmware now owns all occupancy reports explicitly and never
+  touches the ZBoss reporting info table for occupancy.
+
+---
+
 ## v2.4.1 - 2026-04-20
 
 ### Fixes

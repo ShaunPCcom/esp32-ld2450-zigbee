@@ -108,3 +108,19 @@ void coordinator_fallback_set_ack_timeout(uint16_t ms);
 
 /** Return the current soft fault count (read-only; firmware clears on coordinator ACK). */
 uint8_t coordinator_fallback_get_soft_fault_count(void);
+
+/**
+ * Enqueue an explicit occupancy report for the given endpoint with ACK tracking
+ * and retry.  Replaces the raw esp_zb_zcl_set_attribute_val auto-report path.
+ *
+ * @param ep       Zigbee endpoint (1=main, 2-11=zones)
+ * @param occupied New occupancy state
+ */
+void coordinator_fallback_report_occupancy(uint8_t ep, bool occupied);
+
+/**
+ * Start the firmware-side occupancy keep-alive timer (fires every 5 minutes).
+ * Reports all 11 endpoint occupancy states as a burst so Z2M always has a
+ * fresh snapshot even with no motion.  Call once after sensor_bridge_start().
+ */
+void coordinator_fallback_start_keepalive(void);
