@@ -883,7 +883,6 @@ async function doOtaUpdate() {
     if (r.status === 202) {
       toast('UPDATE STARTED\u2026', 'ok');
       applyOtaStatus({ in_progress: true });
-      // loadOtaStatus() call removed — SSE handles updates
     } else if (r.status === 409) {
       toast('UPDATE ALREADY IN PROGRESS', 'err');
     } else {
