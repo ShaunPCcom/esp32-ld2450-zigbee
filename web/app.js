@@ -799,10 +799,23 @@ function applyOtaStatus(d) {
   const updateBtn = document.getElementById('btn-ota-update');
   if (!statusEl || !updateBtn) return;
 
-  const avail = d && d.available;
-  statusEl.textContent = avail ? ('v' + d.latest + ' available') : 'Up to date';
-  updateBtn.disabled   = !avail;
-  document.body.classList.toggle('has-update', !!avail);
+  const inProgress = d && d.in_progress;
+  const avail      = d && d.available;
+  const barText    = document.getElementById('update-bar-text');
+
+  if (inProgress) {
+    statusEl.textContent = 'Updating firmware\u2026';
+    updateBtn.disabled   = true;
+    document.body.classList.remove('has-update');
+    document.body.classList.add('updating-firmware');
+    if (barText) barText.textContent = '\u21bb UPDATING FIRMWARE\u2026';
+  } else {
+    statusEl.textContent = avail ? ('v' + d.latest + ' available') : 'Up to date';
+    updateBtn.disabled   = !avail;
+    document.body.classList.toggle('has-update', !!avail);
+    document.body.classList.remove('updating-firmware');
+    if (barText) barText.textContent = '\u2191 FIRMWARE UPDATE AVAILABLE \u2014 CLICK TO UPDATE';
+  }
 }
 
 async function loadOtaStatus() {
@@ -834,9 +847,14 @@ async function doOtaUpdate() {
   if (!confirm('Download and install firmware update? Device will restart.')) return;
   try {
     const r = await fetch('/api/ota', { method: 'POST' });
-    if (r.status === 202)      toast('UPDATE STARTED…', 'ok');
-    else if (r.status === 409) toast('UPDATE ALREADY IN PROGRESS', 'err');
-    else                       toast('UPDATE FAILED', 'err');
+    if (r.status === 202) {
+      toast('UPDATE STARTED\u2026', 'ok');
+      applyOtaStatus({ in_progress: true });
+    } else if (r.status === 409) {
+      toast('UPDATE ALREADY IN PROGRESS', 'err');
+    } else {
+      toast('UPDATE FAILED', 'err');
+    }
   } catch (e) {
     toast('UPDATE FAILED', 'err');
   }

@@ -121,6 +121,8 @@ body.has-update .update-bar { display: flex; }
   overflow: hidden;
 }
 body.has-update .layout { height: calc(100vh - 76px); }
+body.updating-firmware .update-bar { display: flex; color: #4db8ff; border-bottom-color: rgba(77,184,255,.3); background: rgba(77,184,255,.08); }
+body.updating-firmware .layout { height: calc(100vh - 76px); }
 
 /* ── RADAR PANEL ── */
 .radar-wrap {
@@ -564,6 +566,7 @@ select:focus { border-color: var(--border2); }
   html,body { overflow: auto; height: auto; }
   .layout { grid-template-columns: 1fr; grid-template-rows: 300px auto; height: auto; }
   body.has-update .layout { height: auto; }
+  body.updating-firmware .layout { height: auto; }
   .radar-wrap { height: 300px; }
   .settings { border-left: none; border-top: 1px solid var(--border); }
   .tab-body { max-height: 70vh; }
