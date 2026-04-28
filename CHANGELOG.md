@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.6.1 - 2026-04-27
+
+### Bug Fixes
+- **Z2M zone updates now reflect immediately in web UI**: Config changes written via
+  Z2M (zone coordinates, cooldowns, sensor settings) now trigger an SSE push to the
+  web UI just like web-originated saves do. Previously, the SSE path only fired on
+  HTTP POST — so Z2M attribute writes were invisible to the UI until a manual refresh.
+
+---
+
 ## v2.6.0 - 2026-04-26
 
 ### Features
