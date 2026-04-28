@@ -2,13 +2,13 @@
   {
     "manufacturerCode": 4891,
     "imageType": 1,
-    "fileVersion": 132608,
-    "url": "https://github.com/ShaunPCcom/esp32-ld2450-zigbee/releases/download/v2.6.0-beta/ld2450_zb_h2_v2.6.0-beta.ota"
+    "fileVersion": 132609,
+    "url": "https://github.com/ShaunPCcom/esp32-ld2450-zigbee/releases/download/v2.6.1-beta/ld2450_zb_h2_v2.6.1-beta.ota"
   },
   {
     "manufacturerCode": 4891,
     "imageType": 3,
-    "fileVersion": 132608,
-    "url": "https://github.com/ShaunPCcom/esp32-ld2450-zigbee/releases/download/v2.6.0-beta/ld2450_zb_c6_v2.6.0-beta.ota"
+    "fileVersion": 132609,
+    "url": "https://github.com/ShaunPCcom/esp32-ld2450-zigbee/releases/download/v2.6.1-beta/ld2450_zb_c6_v2.6.1-beta.ota"
   }
 ]
