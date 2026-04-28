@@ -10,7 +10,9 @@
 #include "crash_diag.h"
 #include "ld2450_zone_csv.h"
 #include "nvs_config.h"
+#if CONFIG_IDF_TARGET_ESP32C6
 #include "web_server_base.h"
+#endif
 #include "zigbee_attr_handler.h"
 #include "zigbee_ctrl.h"
 #include "zigbee_defs.h"
@@ -148,7 +150,9 @@ esp_err_t zigbee_action_handler(esp_zb_core_action_callback_id_t callback_id, co
     /* Handle application callbacks */
     if (callback_id == ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID) {
         esp_err_t err = handle_set_attr_value((const esp_zb_zcl_set_attr_value_message_t *)message);
+#if CONFIG_IDF_TARGET_ESP32C6
         if (err == ESP_OK) web_server_base_sse_notify("config");
+#endif
         return err;
     }
     return ESP_OK;
