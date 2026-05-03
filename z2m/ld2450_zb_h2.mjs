@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-'use strict';
 
-// Zigbee2MQTT external converter for LD2450-ZB-H2 mmWave presence sensor.
-// Zero external requires - works with any Z2M version (tested Z2M 2.8.0).
+// Zigbee2MQTT external converter for LD2450-ZB (H2 + C6) mmWave presence sensor.
+// Requires Z2M 2.10.0+ (zigbee-herdsman-converters 26.x, ESM external converter format).
 // Place this file in your Z2M data/external_converters/ directory.
 
-// ---- ZCL data type constants (inline to avoid require('zigbee-herdsman')) ----
+import {deviceAddCustomCluster, identify} from 'zigbee-herdsman-converters/lib/modernExtend';
+
+// ---- ZCL data type constants ----
 const ZCL_UINT8    = 0x20;
 const ZCL_UINT16   = 0x21;
 const ZCL_UINT32   = 0x23;
@@ -25,57 +26,54 @@ const CLUSTER_CONFIG_ID = 0xFC00;
 const zoneConfigAttrs = {};
 for (let n = 0; n < 10; n++) {
     const base = 0x0040 + n * 4;
-    zoneConfigAttrs[`zone${n + 1}VertexCount`] = {ID: base + 0, type: ZCL_UINT8,    write: true};
-    zoneConfigAttrs[`zone${n + 1}Coords`]      = {ID: base + 1, type: ZCL_CHAR_STR, write: true};
-    zoneConfigAttrs[`zone${n + 1}Cooldown`]    = {ID: base + 2, type: ZCL_UINT16,   write: true};
-    zoneConfigAttrs[`zone${n + 1}Delay`]       = {ID: base + 3, type: ZCL_UINT16,   write: true};
+    zoneConfigAttrs[`zone${n + 1}VertexCount`] = {ID: base + 0, name: `zone${n + 1}VertexCount`, type: ZCL_UINT8,    write: true};
+    zoneConfigAttrs[`zone${n + 1}Coords`]      = {ID: base + 1, name: `zone${n + 1}Coords`,      type: ZCL_CHAR_STR, write: true};
+    zoneConfigAttrs[`zone${n + 1}Cooldown`]    = {ID: base + 2, name: `zone${n + 1}Cooldown`,    type: ZCL_UINT16,   write: true};
+    zoneConfigAttrs[`zone${n + 1}Delay`]       = {ID: base + 3, name: `zone${n + 1}Delay`,       type: ZCL_UINT16,   write: true};
 }
 
 // ---- Fallback cooldown attribute layout ----
 const fallbackCooldownAttrs = {};
 for (let n = 0; n < 10; n++) {
-    fallbackCooldownAttrs[`fallbackZone${n + 1}Cooldown`] = {ID: 0x0070 + n, type: ZCL_UINT16, write: true};
+    fallbackCooldownAttrs[`fallbackZone${n + 1}Cooldown`] = {ID: 0x0070 + n, name: `fallbackZone${n + 1}Cooldown`, type: ZCL_UINT16, write: true};
 }
 
 // ---- Custom cluster definition ----
 const ld2450ConfigCluster = {
     ID: CLUSTER_CONFIG_ID,
+    name: 'ld2450Config',
     attributes: {
-        targetCount:          {ID: 0x0000, type: ZCL_UINT8,    report: true},
-        targetCoords:         {ID: 0x0001, type: ZCL_CHAR_STR, report: true},
-        maxDistance:          {ID: 0x0010, type: ZCL_UINT16,   write: true},
-        angleLeft:            {ID: 0x0011, type: ZCL_UINT8,    write: true},
-        angleRight:           {ID: 0x0012, type: ZCL_UINT8,    write: true},
-        trackingMode:         {ID: 0x0020, type: ZCL_UINT8,    write: true},
-        coordPublishing:      {ID: 0x0021, type: ZCL_UINT8,    write: true},
-        occupancyCooldown:    {ID: 0x0022, type: ZCL_UINT16,   write: true},
-        occupancyDelay:       {ID: 0x0023, type: ZCL_UINT16,   write: true},
-        fallbackMode:         {ID: 0x0024, type: ZCL_UINT8,    write: true, report: true},
-        fallbackCooldown:     {ID: 0x0025, type: ZCL_UINT16,   write: true},
-        heartbeatEnable:      {ID: 0x0026, type: ZCL_UINT8,    write: true},
-        heartbeatInterval:    {ID: 0x0027, type: ZCL_UINT16,   write: true},
-        heartbeat:            {ID: 0x0028, type: ZCL_UINT8,    write: true},
-        fallbackEnable:       {ID: 0x0029, type: ZCL_UINT8,    write: true},
+        targetCount:          {ID: 0x0000, name: 'targetCount',       type: ZCL_UINT8,    report: true},
+        targetCoords:         {ID: 0x0001, name: 'targetCoords',      type: ZCL_CHAR_STR, report: true},
+        maxDistance:          {ID: 0x0010, name: 'maxDistance',       type: ZCL_UINT16,   write: true},
+        angleLeft:            {ID: 0x0011, name: 'angleLeft',         type: ZCL_UINT8,    write: true},
+        angleRight:           {ID: 0x0012, name: 'angleRight',        type: ZCL_UINT8,    write: true},
+        trackingMode:         {ID: 0x0020, name: 'trackingMode',      type: ZCL_UINT8,    write: true},
+        coordPublishing:      {ID: 0x0021, name: 'coordPublishing',   type: ZCL_UINT8,    write: true},
+        occupancyCooldown:    {ID: 0x0022, name: 'occupancyCooldown', type: ZCL_UINT16,   write: true},
+        occupancyDelay:       {ID: 0x0023, name: 'occupancyDelay',    type: ZCL_UINT16,   write: true},
+        fallbackMode:         {ID: 0x0024, name: 'fallbackMode',      type: ZCL_UINT8,    write: true, report: true},
+        fallbackCooldown:     {ID: 0x0025, name: 'fallbackCooldown',  type: ZCL_UINT16,   write: true},
+        heartbeatEnable:      {ID: 0x0026, name: 'heartbeatEnable',   type: ZCL_UINT8,    write: true},
+        heartbeatInterval:    {ID: 0x0027, name: 'heartbeatInterval', type: ZCL_UINT16,   write: true},
+        heartbeat:            {ID: 0x0028, name: 'heartbeat',         type: ZCL_UINT8,    write: true},
+        fallbackEnable:       {ID: 0x0029, name: 'fallbackEnable',    type: ZCL_UINT8,    write: true},
 
-        hardTimeoutSec:       {ID: 0x002B, type: ZCL_UINT8,    write: true},
-        ackTimeoutMs:         {ID: 0x002C, type: ZCL_UINT16,   write: true},
-        bootCount:            {ID: 0x0030, type: ZCL_UINT32,   report: false},
-        resetReason:          {ID: 0x0031, type: ZCL_UINT8,    report: false},
-        lastUptimeSec:        {ID: 0x0032, type: ZCL_UINT32,   report: false},
-        minFreeHeap:          {ID: 0x0033, type: ZCL_UINT32,   report: false},
-        diagReset:            {ID: 0x0034, type: ZCL_UINT8,    write: true},
-        restart:              {ID: 0x00F0, type: ZCL_UINT8,    write: true},
-        factoryReset:         {ID: 0x00F1, type: ZCL_UINT8,    write: true},
+        hardTimeoutSec:       {ID: 0x002B, name: 'hardTimeoutSec',    type: ZCL_UINT8,    write: true},
+        ackTimeoutMs:         {ID: 0x002C, name: 'ackTimeoutMs',      type: ZCL_UINT16,   write: true},
+        bootCount:            {ID: 0x0030, name: 'bootCount',         type: ZCL_UINT32,   report: false},
+        resetReason:          {ID: 0x0031, name: 'resetReason',       type: ZCL_UINT8,    report: false},
+        lastUptimeSec:        {ID: 0x0032, name: 'lastUptimeSec',     type: ZCL_UINT32,   report: false},
+        minFreeHeap:          {ID: 0x0033, name: 'minFreeHeap',       type: ZCL_UINT32,   report: false},
+        diagReset:            {ID: 0x0034, name: 'diagReset',         type: ZCL_UINT8,    write: true},
+        restart:              {ID: 0x00F0, name: 'restart',           type: ZCL_UINT8,    write: true},
+        factoryReset:         {ID: 0x00F1, name: 'factoryReset',      type: ZCL_UINT8,    write: true},
         ...zoneConfigAttrs,
         ...fallbackCooldownAttrs,
     },
     commands: {},
     commandsResponse: {},
 };
-
-function registerCustomClusters(device) {
-    device.addCustomCluster('ld2450Config', ld2450ConfigCluster);
-}
 
 // ---- CSV unit conversion helpers ----
 // Firmware stores coordinates in mm; Z2M exposes them in metres.
@@ -92,7 +90,7 @@ function metresCsvToMm(mCsv) {
     return mCsv.split(',').map(v => String(Math.round(Number(v) * 1000))).join(',');
 }
 
-// ---- Expose helpers (inline, no require) ----
+// ---- Expose helpers ----
 
 function binaryExpose(property, label, access, valueOn, valueOff, description, name) {
     return {type: 'binary', name: name || property, label, property, access,
@@ -214,7 +212,6 @@ const tzLocal = {
             ]).flat(),
         ],
         convertSet: async (entity, key, value, meta) => {
-            registerCustomClusters(meta.device);
             const ep1 = meta.device.getEndpoint(1);
 
             /* Zone vertex_count — append/truncate existing coords to match new count */
@@ -309,15 +306,14 @@ const tzLocal = {
                 hard_timeout_sec:   {attr: 'hardTimeoutSec',    val: (v) => v},
                 ack_timeout_ms:     {attr: 'ackTimeoutMs',      val: (v) => v},
             };
-            const m = map[key];
-            if (m) {
-                await ep1.write('ld2450Config', {[m.attr]: m.val(value)});
+            const entry = map[key];
+            if (entry) {
+                await ep1.write('ld2450Config', {[entry.attr]: entry.val(value)});
                 return {state: {[key]: value}};
             }
         },
 
         convertGet: async (entity, key, meta) => {
-            registerCustomClusters(meta.device);
             const ep1 = meta.device.getEndpoint(1);
 
             /* Zone attrs — read from the zone's own EP */
@@ -361,7 +357,6 @@ const tzLocal = {
     diag_reset: {
         key: ['diag_reset_boot_count'],
         convertSet: async (entity, key, value, meta) => {
-            registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
             await ep.write('ld2450Config', {diagReset: 1});
             console.info('[ZB_LD2450] Boot count reset triggered');
@@ -372,7 +367,6 @@ const tzLocal = {
     restart: {
         key: ['restart'],
         convertSet: async (entity, key, value, meta) => {
-            registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
             await ep.write('ld2450Config', {restart: 1});
             return {state: {restart: ''}};
@@ -387,7 +381,6 @@ const tzLocal = {
                 return;
             }
             console.warn('[ZB_LD2450] Factory reset triggered via Z2M');
-            registerCustomClusters(meta.device);
             const ep = meta.device.getEndpoint(1);
             await ep.write('ld2450Config', {factoryReset: 0xFE}, {disableDefaultResponse: true});
         },
@@ -575,7 +568,7 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
     }
 }
 
-// ---- Device definition ----
+// ---- Device definitions ----
 
 const sharedBase = {
     vendor: 'LD2450Z',
@@ -583,17 +576,13 @@ const sharedBase = {
     toZigbee: [tzLocal.config, tzLocal.diag_reset, tzLocal.restart, tzLocal.factory_reset],
     exposes: exposesDefinition,
     ota: true,
+    extend: [deviceAddCustomCluster('ld2450Config', ld2450ConfigCluster), identify()],
     meta: {
         overrideHaDiscoveryPayload: (payload) => {
             if (payload.object_id && payload.object_id.endsWith('_occupancy')) {
                 payload.device_class = 'occupancy';
             }
         },
-    },
-    onEvent: async (type, data, device) => {
-        if (type === 'start' || type === 'deviceInterview') {
-            registerCustomClusters(device);
-        }
     },
 };
 
@@ -606,13 +595,12 @@ const definition = {
     model: 'LD2450-ZB-H2',
     description: 'HLK-LD2450 mmWave presence sensor (Zigbee, ESP32-H2)',
     configure: async (device, coordinatorEndpoint) => {
-        registerCustomClusters(device);
         const ep1 = device.getEndpoint(1);
         await configureBindingsAndReads(device, coordinatorEndpoint);
         await ep1.configureReporting('ld2450Config', [
-            {attribute: 'targetCount',  minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
-            {attribute: 'targetCoords', minimumReportInterval: 0, maximumReportInterval: 300},
-            {attribute: 'fallbackMode', minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0000, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
+            {attribute: {ID: 0x0001, type: ZCL_CHAR_STR}, minimumReportInterval: 0, maximumReportInterval: 300},
+            {attribute: {ID: 0x0024, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
     },
 };
@@ -626,43 +614,43 @@ const definitionC6 = {
     model: 'LD2450-ZB-C6',
     description: 'HLK-LD2450 mmWave presence sensor (Zigbee+WiFi, ESP32-C6)',
     configure: async (device, coordinatorEndpoint) => {
-        registerCustomClusters(device);
         const ep1 = device.getEndpoint(1);
         await configureBindingsAndReads(device, coordinatorEndpoint);
         /* Split into small batches to stay within ZCL frame size limits */
         await ep1.configureReporting('ld2450Config', [
-            {attribute: 'targetCount',      minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
-            {attribute: 'targetCoords',     minimumReportInterval: 0, maximumReportInterval: 300},
-            {attribute: 'fallbackMode',     minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'maxDistance',      minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'angleLeft',        minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0000, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 300,  reportableChange: 1},
+            {attribute: {ID: 0x0001, type: ZCL_CHAR_STR}, minimumReportInterval: 0, maximumReportInterval: 300},
+            {attribute: {ID: 0x0024, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0010, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0011, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
         await ep1.configureReporting('ld2450Config', [
-            {attribute: 'angleRight',       minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'trackingMode',     minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'coordPublishing',  minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'occupancyCooldown',minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'occupancyDelay',   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0012, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0020, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0021, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0022, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0023, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
         await ep1.configureReporting('ld2450Config', [
-            {attribute: 'fallbackEnable',   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'fallbackCooldown', minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'hardTimeoutSec',   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'ackTimeoutMs',     minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'heartbeatEnable',  minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-            {attribute: 'heartbeatInterval',minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0029, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0025, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x002B, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x002C, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0026, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+            {attribute: {ID: 0x0027, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
         ]);
         /* Zone config attrs — each zone on its own EP, one call per EP */
         for (let n = 0; n < 10; n++) {
+            const base = 0x0040 + n * 4;
             const zoneEp = device.getEndpoint(n + 2);
             await zoneEp.configureReporting('ld2450Config', [
-                {attribute: `zone${n + 1}VertexCount`, minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-                {attribute: `zone${n + 1}Coords`,      minimumReportInterval: 0, maximumReportInterval: 3600},
-                {attribute: `zone${n + 1}Cooldown`,    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
-                {attribute: `zone${n + 1}Delay`,       minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+                {attribute: {ID: base + 0, type: ZCL_UINT8},    minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+                {attribute: {ID: base + 1, type: ZCL_CHAR_STR}, minimumReportInterval: 0, maximumReportInterval: 3600},
+                {attribute: {ID: base + 2, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+                {attribute: {ID: base + 3, type: ZCL_UINT16},   minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
             ]);
         }
     },
 };
 
-module.exports = [definition, definitionC6];
+export default [definition, definitionC6];
