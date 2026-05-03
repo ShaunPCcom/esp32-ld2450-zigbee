@@ -135,11 +135,36 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 ## Zigbee2MQTT Setup
 
+### Converter compatibility
+
+Z2M 2.9.2 changed how external converters register custom clusters. The original
+`.js` converter no longer works on 2.9.2 and later — all LD2450-specific entities
+appear null after pairing, only standard occupancy works. Use the table below to
+pick the right file:
+
+| Z2M version | Converter file |
+|-------------|----------------|
+| 2.9.1 and earlier | `z2m/ld2450_zb_h2.js` |
+| 2.9.2 and later | `z2m/ld2450_zb_h2.mjs` |
+
+**Upgrading from `.js` to `.mjs`** (existing installs on Z2M 2.9.2+):
+1. Remove `ld2450_zb_h2.js` from `external_converters/`.
+2. Copy `ld2450_zb_h2.mjs` into `external_converters/`.
+3. Restart Z2M.
+4. Select the device in Z2M → click **Reconfigure**.
+
+No re-pairing or re-interview needed — there are no firmware-side changes. Do not
+load both files at the same time; they define the same device and will create
+duplicate definitions.
+
 1. **Install the external converter**:
    ```bash
+   # Z2M 2.9.2 and later
+   cp z2m/ld2450_zb_h2.mjs /path/to/zigbee2mqtt/data/external_converters/
+
+   # Z2M 2.9.1 and earlier
    cp z2m/ld2450_zb_h2.js /path/to/zigbee2mqtt/data/external_converters/
    ```
-   **Note**: The external converter file name remains `ld2450_zb_h2.js` for compatibility, but it supports both ESP32-H2 and ESP32-C6 targets.
 
 2. **Restart Zigbee2MQTT**
 
@@ -449,7 +474,7 @@ The system is designed with a device-authoritative model — all logic runs on-d
   - `main/sensor_bridge.c` — sensor polling, state tracking, reporting
   - `main/zigbee_signal_handlers.c` — network lifecycle, factory reset
 - **NVS persistence**: `main/nvs_config.c` — load/save all config on boot/change
-- **Z2M converter**: `z2m/ld2450_zb_h2.js` — custom cluster definitions, fromZigbee/toZigbee
+- **Z2M converter**: `z2m/ld2450_zb_h2.mjs` (Z2M 2.9.2+) / `z2m/ld2450_zb_h2.js` (Z2M 2.9.1) — custom cluster definitions, fromZigbee/toZigbee
 
 ### Zigbee Endpoints
 

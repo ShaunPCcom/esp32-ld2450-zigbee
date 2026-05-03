@@ -1,5 +1,32 @@
 # Changelog
 
+## v2.6.2 - 2026-05-02
+
+### Z2M Converter Update Required
+
+Z2M 2.9.2 introduced a breaking change in how external converters register custom
+clusters. On 2.9.2 and later, the old `ld2450_zb_h2.js` converter causes all
+custom cluster (0xFC00) attributes to appear null after pairing — only the standard
+occupancy entities work. This release includes a new ESM converter that fixes the
+issue. See the README for upgrade instructions.
+
+### Features
+- **New ESM converter for Z2M 2.9.2+** (`ld2450_zb_h2.mjs`): Uses the
+  `deviceAddCustomCluster` modernExtend API so the custom cluster is registered
+  before frame dispatch, fixing the silent attribute drop introduced in Z2M 2.9.2.
+  The original `ld2450_zb_h2.js` is retained for anyone still on Z2M 2.9.1.
+
+### Fixes
+- **Web UI zone updates now instant on Z2M attribute writes**: Zone coordinates
+  and config changes written by Z2M now push an immediate SSE update to the web
+  UI. The notify is wired into the NVS save layer so any config change from any
+  source — Z2M, CLI, or web — triggers the push.
+- **WebSocket support enabled in C6 build config**: `CONFIG_HTTPD_WS_SUPPORT` was
+  missing from the C6 sdkconfig, which would have broken the live target stream on
+  a clean build.
+
+---
+
 ## v2.6.1 - 2026-04-27
 
 ### Bug Fixes
