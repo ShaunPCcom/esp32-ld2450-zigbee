@@ -32,11 +32,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   requestAnimationFrame(frame);
   document.getElementById('hdr-host').textContent = location.hostname;
 
-  /* Poll for external config changes (e.g. Z2M attribute writes) */
-  setInterval(pollConfig,    3000);
   setInterval(pollStatus,   10000);
-  /* Poll OTA status periodically to catch background check results */
-  setInterval(loadOtaStatus, 60000);
 });
 
 /* ─────────────────────────────────────────────────────────────
@@ -77,20 +73,6 @@ async function loadStatus() {
     document.getElementById('sy-heap').textContent  = fmtBytes(s.free_heap);
     document.getElementById('wf-state').textContent = s.wifi || '—';
     document.getElementById('wf-host').textContent  = location.hostname;
-  } catch (e) {}
-}
-
-/* Background polls — skip if the user is actively interacting */
-async function pollConfig() {
-  if (drag) return;
-  const focused = document.activeElement;
-  if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'SELECT' || focused.tagName === 'TEXTAREA')) return;
-  try {
-    const r = await fetch('/api/config');
-    const fresh = await r.json();
-    cfg = fresh;
-    applyToUI();
-    if (editMode) renderZoneDetail();
   } catch (e) {}
 }
 
@@ -789,6 +771,56 @@ setInterval(() => {
 }, 2000);
 
 /* ─────────────────────────────────────────────────────────────
+   SSE — live config and OTA sync
+───────────────────────────────────────────────────────────── */
+let _sseReconnectTimer = null;
+let _sseBadgeEl = null;
+
+function _sseShowReconnectBadge(show) {
+  if (show && !_sseBadgeEl) {
+    _sseBadgeEl = document.createElement('div');
+    _sseBadgeEl.id = 'sse-badge';
+    _sseBadgeEl.style.cssText =
+      'position:fixed;bottom:8px;left:50%;transform:translateX(-50%);' +
+      'background:#1a1a1a;color:#f59e0b;border:1px solid #f59e0b44;' +
+      'padding:6px 14px;border-radius:6px;font-size:.8em;z-index:999';
+    _sseBadgeEl.textContent = 'Live sync reconnecting\u2026';
+    document.body.appendChild(_sseBadgeEl);
+  } else if (!show && _sseBadgeEl) {
+    _sseBadgeEl.remove();
+    _sseBadgeEl = null;
+  }
+}
+
+(function initSSE() {
+  const es = new EventSource('/api/events');
+
+  es.addEventListener('config', e => {
+    try {
+      const fresh = JSON.parse(e.data);
+      cfg = fresh;
+      applyToUI();
+      if (editMode) renderZoneDetail();
+    } catch (_) {}
+  });
+
+  es.addEventListener('ota', e => {
+    try { applyOtaStatus(JSON.parse(e.data)); } catch (_) {}
+  });
+
+  es.onerror = () => {
+    clearTimeout(_sseReconnectTimer);
+    _sseReconnectTimer = setTimeout(() => _sseShowReconnectBadge(true), 5000);
+  };
+
+  es.onopen = () => {
+    clearTimeout(_sseReconnectTimer);
+    _sseReconnectTimer = null;
+    _sseShowReconnectBadge(false);
+  };
+})();
+
+/* ─────────────────────────────────────────────────────────────
    Actions
 ───────────────────────────────────────────────────────────── */
 /* ─────────────────────────────────────────────────────────────
@@ -799,17 +831,31 @@ function applyOtaStatus(d) {
   const updateBtn = document.getElementById('btn-ota-update');
   if (!statusEl || !updateBtn) return;
 
-  const avail = d && d.available;
-  statusEl.textContent = avail ? ('v' + d.latest + ' available') : 'Up to date';
-  updateBtn.disabled   = !avail;
-  document.body.classList.toggle('has-update', !!avail);
+  const inProgress = d && d.in_progress;
+  const avail      = d && d.available;
+  const barText    = document.getElementById('update-bar-text');
+
+  if (inProgress) {
+    statusEl.textContent = 'Updating firmware\u2026';
+    updateBtn.disabled   = true;
+    document.body.classList.remove('has-update');
+    document.body.classList.add('updating-firmware');
+    if (barText) barText.textContent = '\u21bb UPDATING FIRMWARE\u2026';
+  } else {
+    statusEl.textContent = avail ? ('v' + d.latest + ' available') : 'Up to date';
+    updateBtn.disabled   = !avail;
+    document.body.classList.toggle('has-update', !!avail);
+    document.body.classList.remove('updating-firmware');
+    if (barText && avail) barText.textContent = '\u2191 FIRMWARE UPDATE AVAILABLE \u2014 CLICK TO UPDATE';
+  }
 }
 
 async function loadOtaStatus() {
   try {
     const r = await fetch('/api/ota/status');
     if (!r.ok) return;
-    applyOtaStatus(await r.json());
+    const d = await r.json();
+    applyOtaStatus(d);
   } catch (e) {}
 }
 
@@ -834,9 +880,14 @@ async function doOtaUpdate() {
   if (!confirm('Download and install firmware update? Device will restart.')) return;
   try {
     const r = await fetch('/api/ota', { method: 'POST' });
-    if (r.status === 202)      toast('UPDATE STARTED…', 'ok');
-    else if (r.status === 409) toast('UPDATE ALREADY IN PROGRESS', 'err');
-    else                       toast('UPDATE FAILED', 'err');
+    if (r.status === 202) {
+      toast('UPDATE STARTED\u2026', 'ok');
+      applyOtaStatus({ in_progress: true });
+    } else if (r.status === 409) {
+      toast('UPDATE ALREADY IN PROGRESS', 'err');
+    } else {
+      toast('UPDATE FAILED', 'err');
+    }
   } catch (e) {
     toast('UPDATE FAILED', 'err');
   }

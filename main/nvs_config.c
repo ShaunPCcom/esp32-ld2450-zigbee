@@ -6,6 +6,9 @@
 #include "nvs.h"
 #include "esp_log.h"
 #include "sensor_bridge.h"
+#if CONFIG_IDF_TARGET_ESP32C6
+#include "web_server_base.h"
+#endif
 
 /* ---------------------------------------------------------------------------
  * Migration guard: lock in both old and new zone struct sizes so a padding
@@ -93,7 +96,12 @@ static esp_err_t nvs_save_u8(const char *key, uint8_t val)
     err = nvs_set_u8(h, key, val);
     if (err == ESP_OK) err = nvs_commit(h);
     nvs_close(h);
-    if (err == ESP_OK) sensor_bridge_mark_config_dirty();
+    if (err == ESP_OK) {
+        sensor_bridge_mark_config_dirty();
+#if CONFIG_IDF_TARGET_ESP32C6
+        web_server_base_sse_notify("config");
+#endif
+    }
     return err;
 }
 
@@ -105,7 +113,12 @@ static esp_err_t nvs_save_u16(const char *key, uint16_t val)
     err = nvs_set_u16(h, key, val);
     if (err == ESP_OK) err = nvs_commit(h);
     nvs_close(h);
-    if (err == ESP_OK) sensor_bridge_mark_config_dirty();
+    if (err == ESP_OK) {
+        sensor_bridge_mark_config_dirty();
+#if CONFIG_IDF_TARGET_ESP32C6
+        web_server_base_sse_notify("config");
+#endif
+    }
     return err;
 }
 
@@ -117,7 +130,12 @@ static esp_err_t nvs_save_blob(const char *key, const void *data, size_t len)
     err = nvs_set_blob(h, key, data, len);
     if (err == ESP_OK) err = nvs_commit(h);
     nvs_close(h);
-    if (err == ESP_OK) sensor_bridge_mark_config_dirty();
+    if (err == ESP_OK) {
+        sensor_bridge_mark_config_dirty();
+#if CONFIG_IDF_TARGET_ESP32C6
+        web_server_base_sse_notify("config");
+#endif
+    }
     return err;
 }
 

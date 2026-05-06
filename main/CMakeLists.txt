@@ -34,8 +34,9 @@ idf_component_register(
 )
 
 if("${IDF_TARGET}" STREQUAL "esp32c6")
-    # Web assets embedded directly in the firmware binary so OTA updates carry
-    # the latest UI. The www SPIFFS partition is no longer mounted or used.
+    # Web assets embedded in firmware binary. On boot, sync_web_assets() in
+    # web_server_base checks the NVS version key and copies to the www SPIFFS
+    # partition if the firmware version has changed, then serves from SPIFFS.
     target_add_binary_data(${COMPONENT_LIB} "../web/index.html" TEXT)
     target_add_binary_data(${COMPONENT_LIB} "../web/app.js"     TEXT)
     target_add_binary_data(${COMPONENT_LIB} "../web/style.css"  TEXT)

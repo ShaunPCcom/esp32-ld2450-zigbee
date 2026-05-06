@@ -238,6 +238,7 @@ static void sensor_poll_cb(uint8_t param)
             s_pending_occupied[0] = false;
             any_sensor_change = true;
             coordinator_fallback_on_occupancy_change(ZB_EP_MAIN, true);
+            coordinator_fallback_report_occupancy(ZB_EP_MAIN, true);
         }
     }
 
@@ -256,6 +257,7 @@ static void sensor_poll_cb(uint8_t param)
             s_pending_clear[0] = false;
             any_sensor_change = true;
             coordinator_fallback_on_occupancy_change(ZB_EP_MAIN, false);
+            coordinator_fallback_report_occupancy(ZB_EP_MAIN, false);
         }
     }
 
@@ -301,6 +303,7 @@ static void sensor_poll_cb(uint8_t param)
                 s_pending_occupied[i + 1] = false;
                 any_sensor_change = true;
                 coordinator_fallback_on_occupancy_change(ZB_EP_ZONE(i), true);
+                coordinator_fallback_report_occupancy(ZB_EP_ZONE(i), true);
             }
         }
 
@@ -319,6 +322,7 @@ static void sensor_poll_cb(uint8_t param)
                 s_pending_clear[i + 1] = false;
                 any_sensor_change = true;
                 coordinator_fallback_on_occupancy_change(ZB_EP_ZONE(i), false);
+                coordinator_fallback_report_occupancy(ZB_EP_ZONE(i), false);
             }
         }
     }
@@ -382,31 +386,11 @@ static void configure_reporting_for_diag_attr(uint16_t attr_id, uint16_t max_int
     esp_zb_zcl_update_reporting_info(&rpt);
 }
 
-static void configure_reporting_for_occ(uint8_t ep)
-{
-    esp_zb_zcl_reporting_info_t rpt = {0};
-    rpt.direction   = ESP_ZB_ZCL_REPORT_DIRECTION_SEND;
-    rpt.ep          = ep;
-    rpt.cluster_id  = ESP_ZB_ZCL_CLUSTER_ID_OCCUPANCY_SENSING;
-    rpt.cluster_role = ESP_ZB_ZCL_CLUSTER_SERVER_ROLE;
-    rpt.attr_id     = ESP_ZB_ZCL_ATTR_OCCUPANCY_SENSING_OCCUPANCY_ID;
-    rpt.u.send_info.min_interval     = REPORT_MIN_INTERVAL;
-    rpt.u.send_info.max_interval     = REPORT_MAX_INTERVAL;
-    rpt.u.send_info.def_min_interval = REPORT_MIN_INTERVAL;
-    rpt.u.send_info.def_max_interval = REPORT_MAX_INTERVAL;
-    rpt.u.send_info.delta.u8         = 0;
-    rpt.dst.profile_id = ESP_ZB_AF_HA_PROFILE_ID;
-    rpt.manuf_code     = ESP_ZB_ZCL_ATTR_NON_MANUFACTURER_SPECIFIC;
-    esp_zb_zcl_update_reporting_info(&rpt);
-}
-
 static void configure_all_reporting(void)
 {
-    /* Occupancy reporting on all 6 endpoints */
-    configure_reporting_for_occ(ZB_EP_MAIN);
-    for (int i = 0; i < ZB_EP_ZONE_COUNT; i++) {
-        configure_reporting_for_occ(ZB_EP_ZONE(i));
-    }
+    /* Occupancy reporting is handled by coordinator_fallback_report_occupancy()
+     * with explicit ACK tracking and retry.  No auto-report entries here. */
+
     /* Boot stats: 5-min keepalive guarantees Z2M gets fresh values after any rejoin */
     configure_reporting_for_diag_attr(ZB_ATTR_BOOT_COUNT,      REPORT_MAX_INTERVAL);
     configure_reporting_for_diag_attr(ZB_ATTR_RESET_REASON,    REPORT_MAX_INTERVAL);
@@ -436,6 +420,7 @@ void sensor_bridge_start(void)
 
     ESP_LOGI(TAG, "Starting sensor bridge (poll every %d ms)", SENSOR_POLL_INTERVAL_MS);
     configure_all_reporting();
+    coordinator_fallback_start_keepalive();
     /* Push real config values on first poll — corrects the max-length padded
      * placeholder used to pre-allocate ZBoss's internal CHAR_STRING buffers. */
     s_config_dirty = true;

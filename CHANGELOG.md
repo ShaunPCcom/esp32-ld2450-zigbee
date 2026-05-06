@@ -1,5 +1,80 @@
 # Changelog
 
+## v2.6.2 - 2026-05-02
+
+### Z2M Converter Update Required
+
+Z2M 2.9.2 introduced a breaking change in how external converters register custom
+clusters. On 2.9.2 and later, the old `ld2450_zb_h2.js` converter causes all
+custom cluster (0xFC00) attributes to appear null after pairing — only the standard
+occupancy entities work. This release includes a new ESM converter that fixes the
+issue. See the README for upgrade instructions.
+
+### Features
+- **New ESM converter for Z2M 2.9.2+** (`ld2450_zb_h2.mjs`): Uses the
+  `deviceAddCustomCluster` modernExtend API so the custom cluster is registered
+  before frame dispatch, fixing the silent attribute drop introduced in Z2M 2.9.2.
+  The original `ld2450_zb_h2.js` is retained for anyone still on Z2M 2.9.1.
+
+### Fixes
+- **Web UI zone updates now instant on Z2M attribute writes**: Zone coordinates
+  and config changes written by Z2M now push an immediate SSE update to the web
+  UI. The notify is wired into the NVS save layer so any config change from any
+  source — Z2M, CLI, or web — triggers the push.
+- **WebSocket support enabled in C6 build config**: `CONFIG_HTTPD_WS_SUPPORT` was
+  missing from the C6 sdkconfig, which would have broken the live target stream on
+  a clean build.
+
+---
+
+## v2.6.1 - 2026-04-27
+
+### Bug Fixes
+- **Z2M zone updates now reflect immediately in web UI**: Config changes written via
+  Z2M (zone coordinates, cooldowns, sensor settings) now trigger an SSE push to the
+  web UI just like web-originated saves do. Previously, the SSE path only fired on
+  HTTP POST — so Z2M attribute writes were invisible to the UI until a manual refresh.
+
+---
+
+## v2.6.0 - 2026-04-26
+
+### Features
+- **Real-time config and OTA push via SSE**: The web UI now receives config and OTA
+  status updates over Server-Sent Events instead of polling. Config changes appear
+  immediately rather than on the next 3-second poll. OTA status updates push as they
+  happen — no more 60-second cycle or 5-second fast-poll during updates.
+- **OTA in-progress indicator**: While a firmware update is running, the web UI shows
+  an updating indicator and disables the install button to prevent duplicate triggers.
+
+---
+
+## v2.5.0 - 2026-04-25
+
+### Features
+- **ACK-tracked occupancy reports with retry**: Occupancy state changes are now
+  sent as explicit ZCL reports with APS acknowledgement tracking. If the coordinator
+  doesn't ACK, the firmware retries up to three times at 250 ms / 500 ms / 1 s
+  before escalating to the existing soft fallback chain. This replaces the
+  send-and-forget ZBoss auto-reporting path.
+- **Firmware-side 5-minute keep-alive**: Every 5 minutes the firmware enqueues a
+  full-state occupancy burst for all 11 endpoints, so Z2M always has a current
+  snapshot even with no motion. Reports are coalesced — a recent state-change
+  report for a given endpoint suppresses the keep-alive report for that endpoint.
+- **Occupancy read on pair**: Z2M now reads current occupancy from all 11 endpoints
+  during the configure phase, so entities are populated immediately after pairing
+  rather than showing null until the first motion event.
+
+### Fixes
+- **NVS reporting info crash on existing devices**: Calling `esp_zb_zcl_stop_attr_reporting`
+  or `esp_zb_zcl_find_reporting_info` on a device whose NVS reporting table was written
+  by a previous firmware version could leave the linked list in a corrupt state,
+  causing a load-access fault on the next boot. The disable-autoreport path has been
+  removed entirely; the firmware now owns all occupancy reports explicitly and never
+  touches the ZBoss reporting info table for occupancy.
+
+---
+
 ## v2.4.1 - 2026-04-20
 
 ### Fixes

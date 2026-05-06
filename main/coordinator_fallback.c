@@ -58,10 +58,32 @@ static uint16_t s_heartbeat_interval_sec = 120;
 static uint8_t  s_heartbeat_gen          = 0;  /* generation counter -- invalidates stale timers */
 
 /* ================================================================== */
+/*  Occupancy report retry queue                                        */
+/* ================================================================== */
+
+#define OCC_RETRY_QUEUE_SIZE   16
+#define OCC_MAX_RETRIES        3
+#define OCC_KEEPALIVE_MS       300000  /* 5 minutes */
+
+static const uint32_t k_retry_delay_ms[OCC_MAX_RETRIES] = {250, 500, 1000};
+
+typedef struct {
+    uint8_t  ep;
+    uint8_t  attempts;            /* retries fired so far (0 before first send) */
+    uint8_t  value;               /* occupancy value being reported */
+    uint8_t  next_value;          /* supersede value pending in-flight completion */
+    uint8_t  in_use            : 1;
+    uint8_t  in_flight         : 1;
+    uint8_t  pending_supersede : 1;
+} occ_slot_t;
+
+static occ_slot_t s_q[OCC_RETRY_QUEUE_SIZE];
+static uint8_t    s_ka_gen = 0;  /* keep-alive generation; invalidates stale alarms */
+
+/* ================================================================== */
 /*  Forward declarations                                                */
 /* ================================================================== */
 
-static void ack_timeout_cb(uint8_t param);
 static void hard_timeout_cb(uint8_t param);
 static void fallback_cooldown_cb(uint8_t param);
 static void heartbeat_timeout_cb(uint8_t param);
@@ -69,6 +91,12 @@ static void send_onoff_via_binding(uint8_t endpoint, bool on);
 static void enter_fallback_mode(void);
 static void start_heartbeat_watchdog(void);
 static void cancel_heartbeat_watchdog(void);
+static void enter_soft_fallback_for_ep(uint8_t ep_idx);
+static void q_send_now(occ_slot_t *slot);
+static void q_on_send_status(uint8_t ep, bool ok);
+static void q_enqueue_or_coalesce(uint8_t ep, uint8_t value);
+static void q_retry_alarm_cb(uint8_t param);
+static void keepalive_alarm_cb(uint8_t param);
 
 /* ================================================================== */
 /*  ZCL attribute helpers                                               */
@@ -112,6 +140,180 @@ static void reconcile_fallback_to_normal(void)
 }
 
 /* ================================================================== */
+/*  Soft fallback entry (called by retry queue on exhaustion)           */
+/* ================================================================== */
+
+static void enter_soft_fallback_for_ep(uint8_t ep_idx)
+{
+    if (!s_fallback_enabled || s_fallback_mode) return;
+
+    uint8_t endpoint = ep_idx + 1;
+    bool    fb_occ   = s_ep[ep_idx].fallback_occupied;
+    bool    already  = s_ep[ep_idx].soft_fallback_active;
+
+    s_ep[ep_idx].soft_fallback_active = true;
+
+    if (!already) {
+        s_soft_fault_count++;
+        set_soft_fault_attr(s_soft_fault_count);
+        ESP_LOGW(TAG, "ep%u: soft fallback #%u (retry exhausted, fb_occ=%d)",
+                 endpoint, s_soft_fault_count, fb_occ);
+    } else {
+        ESP_LOGD(TAG, "ep%u: retry exhausted (already in soft fallback)", endpoint);
+        return;  /* hard timeout already armed */
+    }
+
+    if (fb_occ) {
+        send_onoff_via_binding(endpoint, true);
+    } else {
+        send_onoff_via_binding(endpoint, false);
+    }
+
+    if (!s_hard_timeout_pending) {
+        s_hard_timeout_gen++;
+        esp_zb_scheduler_alarm(hard_timeout_cb, s_hard_timeout_gen,
+                               (uint32_t)s_hard_timeout_sec * 1000);
+        s_hard_timeout_pending = true;
+        ESP_LOGI(TAG, "Hard timeout scheduled in %us", s_hard_timeout_sec);
+    }
+}
+
+/* ================================================================== */
+/*  Occupancy report retry queue implementation                        */
+/* ================================================================== */
+
+static void q_send_now(occ_slot_t *slot)
+{
+    esp_zb_zcl_report_attr_cmd_t cmd = {0};
+    cmd.zcl_basic_cmd.src_endpoint = slot->ep;
+    cmd.address_mode   = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT;
+    cmd.clusterID      = ESP_ZB_ZCL_CLUSTER_ID_OCCUPANCY_SENSING;
+    cmd.direction      = ESP_ZB_ZCL_CMD_DIRECTION_TO_CLI;
+    cmd.dis_default_resp = 1;
+    cmd.attributeID    = ESP_ZB_ZCL_ATTR_OCCUPANCY_SENSING_OCCUPANCY_ID;
+
+    slot->in_flight = 1;
+    esp_err_t err = esp_zb_zcl_report_attr_cmd_req(&cmd);
+    if (err != ESP_OK) {
+        slot->in_flight = 0;
+        ESP_LOGW(TAG, "ep%u: report_attr_cmd_req failed (%d), scheduling retry", slot->ep, err);
+        q_on_send_status(slot->ep, false);
+        return;
+    }
+    ESP_LOGD(TAG, "ep%u: occ report sent (val=%u attempt=%u)", slot->ep, slot->value, slot->attempts);
+}
+
+static void q_on_send_status(uint8_t ep, bool ok)
+{
+    occ_slot_t *slot = NULL;
+    for (int i = 0; i < OCC_RETRY_QUEUE_SIZE; i++) {
+        if (s_q[i].in_use && s_q[i].in_flight && s_q[i].ep == ep) {
+            slot = &s_q[i];
+            break;
+        }
+    }
+    if (!slot) return;  /* no in-flight slot for this EP (stale callback) */
+
+    slot->in_flight = 0;
+
+    if (ok) {
+        ESP_LOGD(TAG, "ep%u: occ report ACK (attempts=%u)", ep, slot->attempts);
+        if (slot->pending_supersede) {
+            uint8_t next_val = slot->next_value;
+            slot->in_use = 0;
+            q_enqueue_or_coalesce(ep, next_val);
+        } else {
+            slot->in_use = 0;
+        }
+        return;
+    }
+
+    /* Send failed — retry or exhaust */
+    slot->attempts++;
+    if (slot->attempts > OCC_MAX_RETRIES) {
+        ESP_LOGW(TAG, "ep%u: occ report retry exhausted (val=%u)", ep, slot->value);
+        uint8_t ep_idx = ep - 1;
+        if (slot->pending_supersede) {
+            uint8_t next_val = slot->next_value;
+            slot->in_use = 0;
+            q_enqueue_or_coalesce(ep, next_val);
+        } else {
+            slot->in_use = 0;
+        }
+        enter_soft_fallback_for_ep(ep_idx);
+        return;
+    }
+
+    uint32_t delay = k_retry_delay_ms[slot->attempts - 1];
+    ESP_LOGD(TAG, "ep%u: occ retry %u in %ums", ep, slot->attempts, delay);
+    esp_zb_scheduler_alarm(q_retry_alarm_cb, (uint8_t)(ep - 1), delay);
+}
+
+static void q_enqueue_or_coalesce(uint8_t ep, uint8_t value)
+{
+    /* Update existing slot for this EP if one exists */
+    for (int i = 0; i < OCC_RETRY_QUEUE_SIZE; i++) {
+        if (!s_q[i].in_use || s_q[i].ep != ep) continue;
+
+        if (!s_q[i].in_flight) {
+            s_q[i].value    = value;
+            s_q[i].attempts = 0;
+            ESP_LOGD(TAG, "ep%u: coalesced occ report (val=%u)", ep, value);
+            return;
+        }
+        s_q[i].pending_supersede = 1;
+        s_q[i].next_value        = value;
+        ESP_LOGD(TAG, "ep%u: pending supersede after in-flight (val=%u)", ep, value);
+        return;
+    }
+
+    /* Allocate new slot */
+    for (int i = 0; i < OCC_RETRY_QUEUE_SIZE; i++) {
+        if (!s_q[i].in_use) {
+            s_q[i] = (occ_slot_t){ .ep = ep, .value = value, .in_use = 1 };
+            q_send_now(&s_q[i]);
+            return;
+        }
+    }
+
+    /* Queue full: drop oldest non-in-flight slot */
+    ESP_LOGW(TAG, "ep%u: retry queue full, dropping oldest pending slot", ep);
+    for (int i = 0; i < OCC_RETRY_QUEUE_SIZE; i++) {
+        if (s_q[i].in_use && !s_q[i].in_flight) {
+            s_q[i] = (occ_slot_t){ .ep = ep, .value = value, .in_use = 1 };
+            q_send_now(&s_q[i]);
+            return;
+        }
+    }
+    ESP_LOGE(TAG, "ep%u: all queue slots in flight, report dropped", ep);
+}
+
+static void q_retry_alarm_cb(uint8_t param)
+{
+    uint8_t ep_idx = param;
+    if (ep_idx > 10) return;
+    uint8_t ep = ep_idx + 1;
+
+    for (int i = 0; i < OCC_RETRY_QUEUE_SIZE; i++) {
+        if (s_q[i].in_use && !s_q[i].in_flight && s_q[i].ep == ep) {
+            q_send_now(&s_q[i]);
+            return;
+        }
+    }
+}
+
+static void keepalive_alarm_cb(uint8_t param)
+{
+    if (param != s_ka_gen) return;  /* stale alarm */
+
+    ESP_LOGD(TAG, "Keep-alive: enqueuing all 11 EP occupancy reports");
+    for (int i = 0; i < 11; i++) {
+        q_enqueue_or_coalesce((uint8_t)(i + 1), s_ep[i].occupied ? 1 : 0);
+    }
+    esp_zb_scheduler_alarm(keepalive_alarm_cb, s_ka_gen, OCC_KEEPALIVE_MS);
+}
+
+/* ================================================================== */
 /*  Send-status callback (APS ACK tracking)                            */
 /* ================================================================== */
 
@@ -135,6 +337,14 @@ static void send_status_cb(esp_zb_zcl_command_send_status_message_t msg)
              src_ep, msg.dst_endpoint, success ? "OK" : "FAIL");
 
     if (src_ep < 1 || src_ep > 11) return;
+
+    /* Route to retry queue for any in-flight occupancy report from this EP */
+    for (int i = 0; i < OCC_RETRY_QUEUE_SIZE; i++) {
+        if (s_q[i].in_use && s_q[i].in_flight && s_q[i].ep == src_ep) {
+            q_on_send_status(src_ep, success);
+            break;
+        }
+    }
 
     if (success) {
         /* Coordinator ACKed -- clear awaiting_ack for ALL EPs */
@@ -183,78 +393,12 @@ static void send_status_cb(esp_zb_zcl_command_send_status_message_t msg)
             ESP_LOGI(TAG, "Coordinator reachable -- reported fallback_mode=1");
         }
     } else {
-        ESP_LOGW(TAG, "ep%u: send failed (status=%d) -- ack_timeout_cb will fire", src_ep, msg.status);
+        ESP_LOGW(TAG, "ep%u: send failed (status=%d)", src_ep, msg.status);
     }
 }
 
 /* ================================================================== */
 /*  ACK timeout callback                                                */
-/* ================================================================== */
-
-static void ack_timeout_cb(uint8_t param)
-{
-    uint8_t endpoint = param >> 1;
-    bool    occupied = (param & 1) != 0;
-
-    if (endpoint < 1 || endpoint > 11) return;
-    uint8_t ep_idx = endpoint - 1;
-
-    if (!s_ep[ep_idx].awaiting_ack) {
-        ESP_LOGI(TAG, "ep%u: ACK arrived before timeout, no fallback", endpoint);
-        return;
-    }
-
-    s_ep[ep_idx].awaiting_ack = false;
-    s_coordinator_reachable   = false;
-
-    bool fb_occ = s_ep[ep_idx].fallback_occupied;
-
-    /* ---- Hard fallback path ---- */
-    if (s_fallback_mode) {
-        ESP_LOGW(TAG, "ep%u: ACK timeout (hard fallback active, fb_occ=%d, raw_occ=%d)",
-                 endpoint, fb_occ, occupied);
-        s_ep[ep_idx].fallback_session_active = true;
-
-        if (fb_occ) {
-            send_onoff_via_binding(endpoint, true);
-            ESP_LOGI(TAG, "ep%u: sent On via binding (hard fallback)", endpoint);
-        } else {
-            send_onoff_via_binding(endpoint, false);
-            ESP_LOGI(TAG, "ep%u: sent Off via binding (hard fallback)", endpoint);
-        }
-        return;
-    }
-
-    /* ---- Soft fallback path ---- */
-    bool already_soft = s_ep[ep_idx].soft_fallback_active;
-    s_ep[ep_idx].soft_fallback_active = true;
-
-    if (!already_soft) {
-        s_soft_fault_count++;
-        set_soft_fault_attr(s_soft_fault_count);
-        ESP_LOGW(TAG, "ep%u: soft fallback #%u (fb_occ=%d, raw_occ=%d)",
-                 endpoint, s_soft_fault_count, fb_occ, occupied);
-    } else {
-        ESP_LOGW(TAG, "ep%u: additional soft fault (already soft, fb_occ=%d)", endpoint, fb_occ);
-    }
-
-    if (fb_occ) {
-        send_onoff_via_binding(endpoint, true);
-        ESP_LOGI(TAG, "ep%u: sent On via binding (soft fallback)", endpoint);
-    } else {
-        send_onoff_via_binding(endpoint, false);
-        ESP_LOGI(TAG, "ep%u: sent Off via binding (soft fallback)", endpoint);
-    }
-
-    if (!s_hard_timeout_pending) {
-        s_hard_timeout_gen++;
-        esp_zb_scheduler_alarm(hard_timeout_cb, s_hard_timeout_gen,
-                               (uint32_t)s_hard_timeout_sec * 1000);
-        s_hard_timeout_pending = true;
-        ESP_LOGI(TAG, "Hard timeout scheduled in %us (gen=%u)", s_hard_timeout_sec, s_hard_timeout_gen);
-    }
-}
-
 /* ================================================================== */
 /*  Hard timeout callback (soft -> hard escalation)                    */
 /* ================================================================== */
@@ -475,6 +619,7 @@ uint8_t coordinator_fallback_get_soft_fault_count(void)
 void coordinator_fallback_init(void)
 {
     memset(s_ep, 0, sizeof(s_ep));
+    memset(s_q, 0, sizeof(s_q));
 
     nvs_config_t cfg;
     nvs_config_get(&cfg);
@@ -567,29 +712,21 @@ void coordinator_fallback_on_occupancy_change(uint8_t endpoint, bool occupied)
         return;
     }
 
-    /* ---- Normal mode: probe coordinator ---- */
-    if (!s_fallback_enabled) return;
+    /* Normal mode: occupancy reporting is handled by coordinator_fallback_report_occupancy
+     * (explicit report_attr_cmd_req with retry queue). Nothing to do here. */
+}
 
-    s_ep[ep_idx].awaiting_ack = true;
+void coordinator_fallback_report_occupancy(uint8_t ep, bool occupied)
+{
+    if (ep < 1 || ep > 11) return;
+    q_enqueue_or_coalesce(ep, occupied ? 1 : 0);
+}
 
-    esp_zb_zcl_custom_cluster_cmd_t probe = {0};
-    probe.zcl_basic_cmd.dst_addr_u.addr_short = 0x0000;
-    probe.zcl_basic_cmd.dst_endpoint          = 1;
-    probe.zcl_basic_cmd.src_endpoint          = ZB_EP_MAIN;
-    probe.address_mode    = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT;
-    probe.profile_id      = ESP_ZB_AF_HA_PROFILE_ID;
-    probe.cluster_id      = ZB_CLUSTER_LD2450_CONFIG;
-    probe.direction       = 0;
-    probe.dis_default_resp = 0;
-    probe.custom_cmd_id   = 0x00;
-    probe.data.size       = 0;
-    probe.data.value      = NULL;
-    esp_zb_zcl_custom_cluster_cmd_req(&probe);
-    ESP_LOGI(TAG, "ep%u: probe sent (occ=%d), ack window=%ums",
-             endpoint, (int)occupied, (unsigned)s_ack_timeout_ms);
-
-    uint8_t ack_param = (uint8_t)((endpoint << 1) | (occupied ? 1 : 0));
-    esp_zb_scheduler_alarm(ack_timeout_cb, ack_param, s_ack_timeout_ms);
+void coordinator_fallback_start_keepalive(void)
+{
+    s_ka_gen++;
+    esp_zb_scheduler_alarm(keepalive_alarm_cb, s_ka_gen, OCC_KEEPALIVE_MS);
+    ESP_LOGI(TAG, "Occupancy keep-alive started (period=%us)", OCC_KEEPALIVE_MS / 1000);
 }
 
 bool coordinator_fallback_is_active(void)
