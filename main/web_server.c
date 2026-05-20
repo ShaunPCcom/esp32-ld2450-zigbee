@@ -14,6 +14,7 @@
 #include "web_server_base.h"
 
 #include "config_api.h"
+#include "portable_config.h"
 #include "sensor_bridge.h"
 #include "version.h"
 #include "zigbee_ota.h"
@@ -108,64 +109,15 @@ static esp_err_t handle_post_config(httpd_req_t *req)
         send_json(req, 400, e); cJSON_Delete(e); return ESP_OK;
     }
 
-    cJSON *item;
-#define APPLY_NUM(key, fn, type) \
-    if ((item = cJSON_GetObjectItem(root, key)) && cJSON_IsNumber(item)) \
-        fn((type)item->valueint)
-
-    APPLY_NUM("max_distance_mm",        config_api_set_max_distance,       uint16_t);
-    APPLY_NUM("angle_left_deg",         config_api_set_angle_left,         uint8_t);
-    APPLY_NUM("angle_right_deg",        config_api_set_angle_right,        uint8_t);
-    APPLY_NUM("tracking_mode",          config_api_set_tracking_mode,      uint8_t);
-    APPLY_NUM("publish_coords",         config_api_set_publish_coords,     uint8_t);
-    APPLY_NUM("fallback_mode",          config_api_set_fallback_mode,      uint8_t);
-    APPLY_NUM("fallback_enable",        config_api_set_fallback_enable,    uint8_t);
-    APPLY_NUM("hard_timeout_sec",       config_api_set_hard_timeout,       uint8_t);
-    APPLY_NUM("ack_timeout_ms",         config_api_set_ack_timeout,        uint16_t);
-    APPLY_NUM("heartbeat_enable",       config_api_set_heartbeat_enable,   uint8_t);
-    APPLY_NUM("heartbeat_interval_sec", config_api_set_heartbeat_interval, uint16_t);
-
-    if ((item = cJSON_GetObjectItem(root, "occupancy_cooldown_sec")) && cJSON_IsNumber(item))
-        config_api_set_occupancy_cooldown(0, (uint16_t)item->valueint);
-    if ((item = cJSON_GetObjectItem(root, "occupancy_delay_ms")) && cJSON_IsNumber(item))
-        config_api_set_occupancy_delay(0, (uint16_t)item->valueint);
-    if ((item = cJSON_GetObjectItem(root, "fallback_cooldown_sec")) && cJSON_IsNumber(item))
-        config_api_set_fallback_cooldown(0, (uint16_t)item->valueint);
-
-#undef APPLY_NUM
-
-    cJSON *zones = cJSON_GetObjectItem(root, "zones");
-    if (cJSON_IsArray(zones)) {
-        int n = cJSON_GetArraySize(zones);
-        for (int i = 0; i < n && i < 10; i++) {
-            cJSON *z = cJSON_GetArrayItem(zones, i);
-            if (!cJSON_IsObject(z)) continue;
-            cJSON *vc = cJSON_GetObjectItem(z, "vertex_count");
-            if (vc && cJSON_IsNumber(vc))
-                config_api_set_zone_vertex_count((uint8_t)i, (uint8_t)vc->valueint);
-            cJSON *coords = cJSON_GetObjectItem(z, "coords");
-            if (coords && cJSON_IsString(coords))
-                config_api_set_zone_coords((uint8_t)i, coords->valuestring);
-            cJSON *cool = cJSON_GetObjectItem(z, "cooldown_sec");
-            if (cool && cJSON_IsNumber(cool))
-                config_api_set_occupancy_cooldown((uint8_t)(i + 1), (uint16_t)cool->valueint);
-            cJSON *delay = cJSON_GetObjectItem(z, "delay_ms");
-            if (delay && cJSON_IsNumber(delay))
-                config_api_set_occupancy_delay((uint8_t)(i + 1), (uint16_t)delay->valueint);
-            cJSON *fcool = cJSON_GetObjectItem(z, "fallback_cooldown_sec");
-            if (fcool && cJSON_IsNumber(fcool))
-                config_api_set_fallback_cooldown((uint8_t)(i + 1), (uint16_t)fcool->valueint);
-        }
-    }
-    cJSON_Delete(root);
-
-    sensor_bridge_mark_config_dirty();
-
+    /* Respond before applying — config_api_apply_all saves to NVS then restarts */
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "status", "ok");
     send_json(req, 200, resp);
     cJSON_Delete(resp);
-    return ESP_OK;
+
+    config_api_apply_all(root);
+    cJSON_Delete(root);   /* unreachable */
+    return ESP_OK;        /* unreachable */
 }
 
 /* ================================================================== */
@@ -269,6 +221,9 @@ static int ld2450_sse_serialize(const char *topic, char *buf, size_t buf_len)
         cJSON_AddStringToObject(json, "current",     plain);
         cJSON_AddStringToObject(json, "latest",      ota_check_latest_version());
         cJSON_AddBoolToObject  (json, "in_progress", zigbee_ota_is_in_progress());
+    } else if (strcmp(topic, "backup") == 0) {
+        int n = portable_config_get_status_json(buf, buf_len);
+        return n;
     } else {
         return -1;
     }
@@ -312,7 +267,7 @@ esp_err_t web_server_start(void)
 
     xTaskCreate(ws_push_task, "ws_push", 4096, NULL, 4, NULL);
 
-    static const char *const sse_topics[] = {"config", "ota", NULL};
+    static const char *const sse_topics[] = {"config", "ota", "backup", NULL};
     web_server_base_sse_register("/api/events", sse_topics, ld2450_sse_serialize);
     zigbee_ota_register_status_callback(ota_status_cb);
 
