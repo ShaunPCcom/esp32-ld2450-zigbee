@@ -9,6 +9,7 @@
 #include "nvs_config.h"
 
 #include "esp_log.h"
+#include "esp_system.h"
 #include "cJSON.h"
 #include <string.h>
 
@@ -71,6 +72,16 @@ esp_err_t config_api_set_publish_coords(uint8_t enabled)
     esp_err_t err = nvs_config_save_publish_coords(enabled);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "save publish_coords: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t config_api_set_bt_disabled(uint8_t disabled)
+{
+    ld2450_cmd_set_bluetooth(disabled == 0);
+    esp_err_t err = nvs_config_save_bt_disabled(disabled);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "save bt_disabled: %s", esp_err_to_name(err));
     }
     return err;
 }
@@ -202,6 +213,82 @@ esp_err_t config_api_set_zone_coords(uint8_t zone_idx, const char *csv)
     return nvs_config_save_zone(zone_idx, &cfg.zones[zone_idx]);
 }
 
+/* ---- Apply-all deserialization ---- */
+
+/* Saves all fields directly to NVS without UART commands or ZBoss calls, then
+ * restarts. Called from within a ZBoss scheduler alarm — the ZBoss task cannot
+ * safely execute blocking UART or nested ZBoss calls, so hardware application
+ * (ld2450_cmd_*, coordinator_fallback_*) happens on the next boot from NVS. */
+esp_err_t config_api_apply_all(const cJSON *root)
+{
+    if (root == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *item;
+#define SAVE_NUM(key, fn, type) \
+    if ((item = cJSON_GetObjectItem(root, key)) && cJSON_IsNumber(item)) \
+        fn((type)item->valueint)
+
+    SAVE_NUM("max_distance_mm",        nvs_config_save_max_distance,       uint16_t);
+    SAVE_NUM("angle_left_deg",         nvs_config_save_angle_left,         uint8_t);
+    SAVE_NUM("angle_right_deg",        nvs_config_save_angle_right,        uint8_t);
+    SAVE_NUM("tracking_mode",          nvs_config_save_tracking_mode,      uint8_t);
+    SAVE_NUM("publish_coords",         nvs_config_save_publish_coords,     uint8_t);
+    SAVE_NUM("bt_disabled",            nvs_config_save_bt_disabled,        uint8_t);
+    SAVE_NUM("fallback_mode",          nvs_config_save_fallback_mode,      uint8_t);
+    SAVE_NUM("fallback_enable",        nvs_config_save_fallback_enable,    uint8_t);
+    SAVE_NUM("hard_timeout_sec",       nvs_config_save_hard_timeout_sec,   uint8_t);
+    SAVE_NUM("ack_timeout_ms",         nvs_config_save_ack_timeout_ms,     uint16_t);
+    SAVE_NUM("heartbeat_enable",       nvs_config_save_heartbeat_enable,   uint8_t);
+    SAVE_NUM("heartbeat_interval_sec", nvs_config_save_heartbeat_interval, uint16_t);
+
+    if ((item = cJSON_GetObjectItem(root, "occupancy_cooldown_sec")) && cJSON_IsNumber(item))
+        nvs_config_save_occupancy_cooldown(0, (uint16_t)item->valueint);
+    if ((item = cJSON_GetObjectItem(root, "occupancy_delay_ms")) && cJSON_IsNumber(item))
+        nvs_config_save_occupancy_delay(0, (uint16_t)item->valueint);
+    if ((item = cJSON_GetObjectItem(root, "fallback_cooldown_sec")) && cJSON_IsNumber(item))
+        nvs_config_save_fallback_cooldown(0, (uint16_t)item->valueint);
+
+#undef SAVE_NUM
+
+    nvs_config_t cfg;
+    nvs_config_get(&cfg);
+
+    cJSON *zones = cJSON_GetObjectItem(root, "zones");
+    if (cJSON_IsArray(zones)) {
+        int n = cJSON_GetArraySize(zones);
+        for (int i = 0; i < n && i < 10; i++) {
+            cJSON *z = cJSON_GetArrayItem(zones, i);
+            if (!cJSON_IsObject(z)) continue;
+
+            cJSON *vc = cJSON_GetObjectItem(z, "vertex_count");
+            if (vc && cJSON_IsNumber(vc))
+                cfg.zones[i].vertex_count = (uint8_t)vc->valueint;
+
+            cJSON *coords = cJSON_GetObjectItem(z, "coords");
+            if (coords && cJSON_IsString(coords))
+                csv_to_zone(coords->valuestring, &cfg.zones[i]);
+
+            nvs_config_save_zone(i, &cfg.zones[i]);
+
+            cJSON *cool = cJSON_GetObjectItem(z, "cooldown_sec");
+            if (cool && cJSON_IsNumber(cool))
+                nvs_config_save_occupancy_cooldown((uint8_t)(i + 1), (uint16_t)cool->valueint);
+            cJSON *delay = cJSON_GetObjectItem(z, "delay_ms");
+            if (delay && cJSON_IsNumber(delay))
+                nvs_config_save_occupancy_delay((uint8_t)(i + 1), (uint16_t)delay->valueint);
+            cJSON *fcool = cJSON_GetObjectItem(z, "fallback_cooldown_sec");
+            if (fcool && cJSON_IsNumber(fcool))
+                nvs_config_save_fallback_cooldown((uint8_t)(i + 1), (uint16_t)fcool->valueint);
+        }
+    }
+
+    ESP_LOGI(TAG, "import complete — restarting to apply");
+    esp_restart();
+    return ESP_OK; /* unreachable */
+}
+
 /* ---- Read-all serialization ---- */
 
 esp_err_t config_api_get_all(cJSON **out)
@@ -224,6 +311,7 @@ esp_err_t config_api_get_all(cJSON **out)
     cJSON_AddNumberToObject(root, "max_distance_mm",  cfg.max_distance_mm);
     cJSON_AddNumberToObject(root, "angle_left_deg",   cfg.angle_left_deg);
     cJSON_AddNumberToObject(root, "angle_right_deg",  cfg.angle_right_deg);
+    cJSON_AddNumberToObject(root, "bt_disabled",      cfg.bt_disabled);
 
     /* Main EP occupancy timing */
     cJSON_AddNumberToObject(root, "occupancy_cooldown_sec", cfg.occupancy_cooldown_sec[0]);

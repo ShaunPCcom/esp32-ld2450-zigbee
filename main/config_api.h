@@ -57,7 +57,10 @@ esp_err_t config_api_set_zone_vertex_count(uint8_t zone_idx, uint8_t vc);
  */
 esp_err_t config_api_set_zone_coords(uint8_t zone_idx, const char *csv);
 
-/* ---- Read-all for REST/WebSocket ---- */
+/* ---- Bluetooth state ---- */
+esp_err_t config_api_set_bt_disabled(uint8_t disabled);
+
+/* ---- Read-all for REST/WebSocket and portable backup ---- */
 
 /**
  * Serialize the entire device configuration to a newly allocated cJSON object.
@@ -65,3 +68,10 @@ esp_err_t config_api_set_zone_coords(uint8_t zone_idx, const char *csv);
  * Returns ESP_ERR_NO_MEM on allocation failure.
  */
 esp_err_t config_api_get_all(cJSON **out);
+
+/**
+ * Apply a full configuration JSON object (as produced by config_api_get_all).
+ * Validates and applies all recognised keys; unknown keys are silently ignored.
+ * Used by both handle_post_config and the portable backup import path.
+ */
+esp_err_t config_api_apply_all(const cJSON *root);

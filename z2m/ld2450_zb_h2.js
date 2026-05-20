@@ -16,8 +16,10 @@ const ACCESS_STATE = 0b001; // 1
 const ACCESS_SET   = 0b010; // 2
 const ACCESS_ALL   = 0b111; // 7
 
-// ---- Cluster ID ----
-const CLUSTER_CONFIG_ID = 0xFC00;
+// ---- Cluster IDs ----
+const CLUSTER_CONFIG_ID   = 0xFC00;
+const CLUSTER_PC_ID       = 0xFC10;
+const MFG_OPTS            = {manufacturerCode: 0x131B};
 
 // ---- Zone config attribute layout ----
 // Base formula: 0x0040 + n*4 (n = 0..9, firmware 0-indexed, Z2M 1-indexed)
@@ -73,8 +75,24 @@ const ld2450ConfigCluster = {
     commandsResponse: {},
 };
 
+// ---- Portable config cluster definition (0xFC10) ----
+const portableConfigCluster = {
+    ID: CLUSTER_PC_ID,
+    attributes: {
+        chunkIdx:    {ID: 0x0100, type: ZCL_UINT16,   write: true},
+        chunkData:   {ID: 0x0101, type: ZCL_CHAR_STR, write: true},
+        chunkCount:  {ID: 0x0102, type: ZCL_UINT16,   report: true},
+        trigger:     {ID: 0x0103, type: ZCL_UINT8,    write: true},
+        pcStatus:    {ID: 0x0104, type: ZCL_UINT8,    report: true},
+        pcErrorCode: {ID: 0x0105, type: ZCL_UINT8,    report: true},
+    },
+    commands: {},
+    commandsResponse: {},
+};
+
 function registerCustomClusters(device) {
     device.addCustomCluster('ld2450Config', ld2450ConfigCluster);
+    device.addCustomCluster('portableConfig', portableConfigCluster);
 }
 
 // ---- CSV unit conversion helpers ----
@@ -192,6 +210,21 @@ const fzLocal = {
 
             return result;
         },
+    },
+};
+
+// ---- Portable config fromZigbee ----
+
+const fzPortableConfig = {
+    cluster: 'portableConfig',
+    type: ['attributeReport', 'readResponse'],
+    convert: (model, msg, publish, options, meta) => {
+        const result = {};
+        const d = msg.data;
+        if (d.pcStatus   !== undefined) result.pc_status    = d.pcStatus;
+        if (d.pcErrorCode!== undefined) result.pc_error_code = d.pcErrorCode;
+        if (d.chunkCount !== undefined) result.pc_chunk_count = d.chunkCount;
+        return result;
     },
 };
 
@@ -394,6 +427,47 @@ const tzLocal = {
     },
 };
 
+// ---- Portable config toZigbee handlers ----
+
+const tzPortableConfig = {
+    config_export: {
+        key: ['config_export'],
+        convertSet: async (entity, key, value, meta) => {
+            registerCustomClusters(meta.device);
+            const ep = meta.device.getEndpoint(1);
+            /* trigger export */
+            await ep.write('portableConfig', {trigger: 1});
+            /* read chunk count */
+            const ccRes = await ep.read('portableConfig', ['chunkCount']);
+            const cc = ccRes.chunkCount || 0;
+            let buf = '';
+            for (let i = 0; i < cc; i++) {
+                await ep.write('portableConfig', {chunkIdx: i});
+                const r = await ep.read('portableConfig', ['chunkData']);
+                buf += (r.chunkData || '');
+            }
+            return {state: {config_export_data: buf}};
+        },
+    },
+
+    config_import: {
+        key: ['config_import'],
+        convertSet: async (entity, key, value, meta) => {
+            const json = String(value);
+            if (json.length > 8192) throw new Error('Bundle exceeds 8 KB limit');
+            registerCustomClusters(meta.device);
+            const ep = meta.device.getEndpoint(1);
+            const chunks = json.match(/.{1,64}/gs) || [];
+            for (let i = 0; i < chunks.length; i++) {
+                await ep.write('portableConfig', {chunkIdx: i});
+                await ep.write('portableConfig', {chunkData: chunks[i]});
+            }
+            await ep.write('portableConfig', {trigger: 2});
+            return {state: {config_import: 'submitted'}};
+        },
+    },
+};
+
 // ---- Expose definitions ----
 
 const exposesDefinition = [
@@ -527,6 +601,17 @@ const exposesDefinition = [
     {type: 'text', name: 'factory_reset_confirm', label: 'Factory reset confirm',
         property: 'factory_reset_confirm', access: ACCESS_SET,
         description: 'Type "factory-reset" exactly and press Set to perform a full factory reset. Erases all settings and Zigbee network data.'},
+
+    enumExpose('config_export', 'Export config', ACCESS_SET, ['export'],
+        'Select "export" and press Set to export the full device configuration'),
+    textExpose('config_export_data', 'Exported config', ACCESS_STATE,
+        'Last exported configuration JSON — copy to save your backup'),
+    textExpose('config_import', 'Config import', ACCESS_ALL,
+        'Paste a JSON config bundle here and press Set to import'),
+    numericExpose('pc_status', 'Backup status', ACCESS_STATE,
+        '0=idle 1=exporting 2=importing 3=ok 4=error'),
+    numericExpose('pc_error_code', 'Backup error code', ACCESS_STATE,
+        '0=none 1=schema 2=device 3=size 4=parse 5=apply'),
 ];
 
 // ---- Shared configure helpers ----
@@ -557,6 +642,15 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
         'bootCount', 'resetReason', 'lastUptimeSec', 'minFreeHeap',
     ]);
 
+    /* Portable config cluster 0xFC10: bind so status reports reach coordinator */
+    await ep1.bind('portableConfig', coordinatorEndpoint);
+    await ep1.configureReporting('portableConfig', [
+        {attribute: {ID: 0x0104, type: ZCL_UINT8},  minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+        {attribute: {ID: 0x0105, type: ZCL_UINT8},  minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+        {attribute: {ID: 0x0102, type: ZCL_UINT16}, minimumReportInterval: 0, maximumReportInterval: 3600, reportableChange: 0},
+    ]);
+    await ep1.read('portableConfig', ['pcStatus', 'pcErrorCode', 'chunkCount']);
+
     /* EPs 2-11: occupancy + per-zone config cluster */
     for (let n = 0; n < 10; n++) {
         const zoneEp = device.getEndpoint(n + 2);
@@ -579,8 +673,9 @@ async function configureBindingsAndReads(device, coordinatorEndpoint) {
 
 const sharedBase = {
     vendor: 'LD2450Z',
-    fromZigbee: [fzLocal.occupancy, fzLocal.config],
-    toZigbee: [tzLocal.config, tzLocal.diag_reset, tzLocal.restart, tzLocal.factory_reset],
+    fromZigbee: [fzLocal.occupancy, fzLocal.config, fzPortableConfig],
+    toZigbee: [tzLocal.config, tzLocal.diag_reset, tzLocal.restart, tzLocal.factory_reset,
+               tzPortableConfig.config_export, tzPortableConfig.config_import],
     exposes: exposesDefinition,
     ota: true,
     meta: {
