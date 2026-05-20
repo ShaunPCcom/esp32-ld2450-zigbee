@@ -237,6 +237,12 @@
         </div>
         <button class="btn" onclick="saveOtaIndexUrl()">Save URL</button>
         <button class="btn" onclick="resetOtaIndexUrl()">Reset to Default</button>
+
+        <div class="sec">Backup &amp; Restore</div>
+        <a id="backup-export-btn" class="btn" href="/api/backup" download>&#8659; Export Config</a>
+        <input id="backup-import-file" type="file" accept="application/json" style="display:none">
+        <button class="btn" onclick="document.getElementById('backup-import-file').click()">&#8657; Import Config&hellip;</button>
+        <div id="backup-status" style="margin-top:6px;font-size:0.85em;color:var(--c-muted)"></div>
       </div>
 
     </div><!-- /tab-body -->

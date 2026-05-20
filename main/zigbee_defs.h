@@ -16,6 +16,7 @@
 
 /* ---- Custom cluster IDs (manufacturer-specific range 0xFC00-0xFFFE) ---- */
 #define ZB_CLUSTER_LD2450_CONFIG       0xFC00  /* EP1: sensor config+data; EP2-11: per-zone config */
+#define ZB_CLUSTER_PC_CONFIG           0xFC10  /* EP1: portable config import/export (6 attrs) */
 
 /* ---- Attributes on ZB_CLUSTER_LD2450_CONFIG (EP 1) ---- */
 #define ZB_ATTR_TARGET_COUNT           0x0000  /* U8, read-only + reportable */

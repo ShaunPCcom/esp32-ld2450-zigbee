@@ -23,6 +23,7 @@ idf_component_register(
     PRIV_REQUIRES
         nvs_flash
         json
+        portable_config
         ${C6_PRIV_REQUIRES}
     REQUIRES
         ld2450

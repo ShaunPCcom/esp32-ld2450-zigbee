@@ -10,6 +10,7 @@
 #include "crash_diag.h"
 #include "ld2450_zone_csv.h"
 #include "nvs_config.h"
+#include "portable_config.h"
 #include "zigbee_attr_handler.h"
 #include "zigbee_ctrl.h"
 #include "zigbee_defs.h"
@@ -77,6 +78,11 @@ static esp_err_t handle_set_attr_value(const esp_zb_zcl_set_attr_value_message_t
         default:
             break;
         }
+    }
+
+    /* EP1 portable config cluster 0xFC10 */
+    if (ep == ZB_EP_MAIN && cluster == ZB_CLUSTER_PC_CONFIG) {
+        return portable_config_handle_attr_write(attr_id, val);
     }
 
     /* EP1 fallback zone cooldown attributes (0x0070-0x0079) on cluster 0xFC00 */

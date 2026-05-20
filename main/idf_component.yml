@@ -46,3 +46,7 @@ dependencies:
     git: https://github.com/ShaunPCcom/esp32-common.git
     path: web_server_base
     version: "master"
+  portable_config:
+    git: https://github.com/ShaunPCcom/esp32-common.git
+    path: portable_config
+    version: "master"

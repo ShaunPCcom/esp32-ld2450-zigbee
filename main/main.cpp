@@ -8,10 +8,12 @@
 
 extern "C" {
 #include "crash_diag.h"
+#include "config_api.h"
 #include "ld2450.h"
 #include "ld2450_cmd.h"
 #include "ld2450_cli.h"
 #include "nvs_config.h"
+#include "portable_config.h"
 #include "zigbee_init.h"
 #include "zigbee_signal_handlers.h"
 #if CONFIG_IDF_TARGET_ESP32C6
@@ -23,6 +25,7 @@ extern "C" {
 }
 
 #include "sdkconfig.h"
+#include "version.h"
 
 /* C++ shared components */
 #include "project_defaults.hpp"
@@ -97,6 +100,19 @@ extern "C" void app_main(void)
     /* Load persistent config (or defaults) */
     ESP_ERROR_CHECK(nvs_config_init());
 
+    /* Register portable config callbacks (serialize = get_all, deserialize = apply_all) */
+    {
+        portable_config_init_t pc_cfg = {
+            .device_tag      = "ld2450",
+            .schema_version  = 1,
+            .fw_version      = FIRMWARE_VERSION_STRING,
+            .cluster_id      = 0xFC10,  /* ZB_CLUSTER_PC_CONFIG */
+            .serialize       = config_api_get_all,
+            .deserialize     = config_api_apply_all,
+        };
+        ESP_ERROR_CHECK(portable_config_init(&pc_cfg));
+    }
+
     /* Initialize crash diagnostics (must be early for accurate reset reason) */
     ESP_ERROR_CHECK(crash_diag_init());
 
@@ -139,6 +155,7 @@ extern "C" void app_main(void)
     }
 
     web_server_start();
+    portable_config_register_http();
     ESP_LOGI(TAG, "WiFi manager started");
 #else
     zigbee_init();

@@ -24,6 +24,7 @@
 #include "zigbee_init.h"
 #include "zigbee_ota.h"
 #include "zigbee_signal_handlers.h"
+#include "portable_config.h"
 
 static const char *TAG = "zigbee_init";
 
@@ -257,6 +258,11 @@ static esp_zb_cluster_list_t *create_main_ep_clusters(void)
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_occupancy_sensing_cluster(cl, occ, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_custom_cluster(cl, custom, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
 
+    /* Portable config cluster 0xFC10 — dedicated cluster keeps attr count on 0xFC00 in range */
+    esp_zb_attribute_list_t *pc_cluster = esp_zb_zcl_attr_list_create(ZB_CLUSTER_PC_CONFIG);
+    ESP_ERROR_CHECK(portable_config_add_attrs(pc_cluster));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_custom_cluster(cl, pc_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+
     /* On/Off CLIENT cluster — enables binding-based dispatch for fallback mode.
      * Client On/Off (0x0006) and server Occupancy Sensing (0x0406) are different
      * cluster IDs on the same endpoint, which is valid ZCL. */
@@ -415,6 +421,7 @@ static void zigbee_register_endpoints(void)
     }
 
     ESP_ERROR_CHECK(esp_zb_device_register(ep_list));
+    portable_config_set_endpoint(ZB_EP_MAIN);
     ESP_LOGI(TAG, "Registered %d endpoints (EP %d main + EP %d-%d zones)",
              1 + ZB_EP_ZONE_COUNT, ZB_EP_MAIN,
              ZB_EP_ZONE(0), ZB_EP_ZONE(ZB_EP_ZONE_COUNT - 1));
