@@ -795,6 +795,16 @@ function _sseShowReconnectBadge(show) {
 (function initSSE() {
   const es = new EventSource('/api/events');
 
+  let _bootId = null;
+  es.addEventListener('boot', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (!d || !d.boot_id) return;
+      if (_bootId === null) _bootId = d.boot_id;
+      else if (d.boot_id !== _bootId) location.reload();
+    } catch (_) {}
+  });
+
   es.addEventListener('config', e => {
     try {
       const fresh = JSON.parse(e.data);
@@ -806,6 +816,17 @@ function _sseShowReconnectBadge(show) {
 
   es.addEventListener('ota', e => {
     try { applyOtaStatus(JSON.parse(e.data)); } catch (_) {}
+  });
+
+  es.addEventListener('backup', e => {
+    try {
+      const d = JSON.parse(e.data);
+      const el = document.getElementById('backup-status');
+      if (el && d && d.status !== undefined) {
+        const labels = { 0:'Idle', 1:'Exporting\u2026', 2:'Importing\u2026', 3:'Done', 4:'Error' };
+        el.textContent = labels[d.status] || ('Status: ' + d.status);
+      }
+    } catch (_) {}
   });
 
   es.onerror = () => {
@@ -1048,3 +1069,31 @@ async function resetOtaIndexUrl() {
     toast('RESET FAILED', 'err');
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Backup & Restore
+───────────────────────────────────────────────────────────── */
+document.getElementById('backup-import-file').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('backup-status');
+  if (statusEl) statusEl.textContent = 'Applying\u2026';
+  try {
+    const text = await file.text();
+    const r = await fetch('/api/backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: text
+    });
+    const d = await r.json();
+    if (r.ok) {
+      if (statusEl) statusEl.textContent = 'Restored \u2014 waiting for device\u2026';
+    } else {
+      if (statusEl) statusEl.textContent = 'Error: ' + (d.error || r.status);
+    }
+  } catch (err) {
+    /* Connection drop is expected — esp_restart fires before the 200 goes out */
+    if (statusEl) statusEl.textContent = 'Restored \u2014 waiting for device\u2026';
+  }
+  e.target.value = '';
+});
