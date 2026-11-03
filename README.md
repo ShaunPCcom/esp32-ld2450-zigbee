@@ -108,7 +108,7 @@ Both versions support: occupancy detection (overall + per-zone), target count, m
 
 ### Prerequisites
 
-- ESP-IDF v5.5+
+- ESP-IDF v6.0+
 - Git
 
 ```bash
@@ -132,6 +132,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 **Note**: `idf.py monitor` may trigger a reboot due to DTR/RTS reset. Use `idf.py monitor --no-reset` to attach without rebooting.
 
 **Note (ESP32-C6)**: After flashing, the device starts in AP mode for WiFi setup via the web UI. WiFi must be connected before Zigbee starts.
+WiFi AP and Zigbee never run at the same time (softAP/802.15.4 coexistence is unstable). Once credentials are stored, the device never falls back to AP — if WiFi drops it keeps retrying (every 30s) while Zigbee keeps running. To return to AP provisioning: `ld wifi-reset` (keeps Zigbee pairing) or a full factory reset (clears everything, including WiFi).
 
 ## Zigbee2MQTT Setup
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.7.0 - 2026-11-03
+
+### Fixes
+- **C6: the WiFi access point can no longer appear while Zigbee is running.** The AP
+  and the Zigbee radio are unstable together, and the old code started the AP after
+  5 failed WiFi reconnects. It now keeps retrying (5 quick attempts, then every 30
+  seconds) and never falls back to AP. The AP only starts at boot when no WiFi
+  credentials are stored, and Zigbee isn't started in that boot.
+- **C6: full factory reset now also clears WiFi credentials**, so the device goes
+  back to AP setup. `ld wifi-reset` still clears WiFi only and keeps the Zigbee pairing.
+
+### Build
+- Builds on ESP-IDF 6.0.2 (CI updated). The removed `json` component is replaced by
+  `espressif/cjson`, and `ld2450` now declares its `esp_driver_uart` / `esp_driver_gpio`
+  requirements. ESP-IDF 5.x is no longer supported.
+
+### Notes
+- The config backup/restore work from the unreleased 2.6.x dev builds is parked on the
+  `feature/portable-config` branch and is not in this release.
+
 ## v2.6.2 - 2026-05-02
 
 ### Z2M Converter Update Required
