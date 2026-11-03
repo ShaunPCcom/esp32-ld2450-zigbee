@@ -2,7 +2,7 @@
 dependencies:
   ## Required IDF version
   idf:
-    version: '>=5.5.0'
+    version: '>=6.0.0'
   # # Put list of dependencies here
   # # For components maintained by Espressif:
   # component: "~1.0.0"
@@ -15,6 +15,7 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/mdns: ">=1.0.0"
+  espressif/cjson: "^1.7.19"
   espressif/esp-zigbee-lib: ^1.6.4
   espressif/esp-zboss-lib: '*'
   led_strip: "*"

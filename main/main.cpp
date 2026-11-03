@@ -131,6 +131,7 @@ extern "C" void app_main(void)
 
     if (wifi_manager_has_credentials()) {
         ESP_LOGI(TAG, "Credentials found — operational mode: Zigbee + WiFi STA");
+        wifi_manager_set_ap_locked(true);   /* AP and Zigbee are mutually exclusive */
         zigbee_init();
         wifi_manager_start();   /* has creds → calls start_sta_mode() */
     } else {

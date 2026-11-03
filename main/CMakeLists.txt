@@ -22,7 +22,6 @@ idf_component_register(
     INCLUDE_DIRS "."
     PRIV_REQUIRES
         nvs_flash
-        json
         ${C6_PRIV_REQUIRES}
     REQUIRES
         ld2450
