@@ -101,7 +101,7 @@ jobs:
 
       - name: Clone ESP-IDF
         run: |
-          git clone --recursive --branch v6.0.2 --depth 1 https://github.com/espressif/esp-idf.git
+          git clone --recursive --shallow-submodules --jobs 8 --branch v6.0.2 --depth 1 https://github.com/espressif/esp-idf.git
           cd esp-idf
           ./install.sh esp32h2,esp32c6
 
