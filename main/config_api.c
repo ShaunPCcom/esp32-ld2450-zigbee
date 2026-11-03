@@ -9,8 +9,10 @@
 #include "nvs_config.h"
 
 #include "esp_log.h"
-#include "esp_system.h"
+#include "esp_zigbee_core.h"
 #include "cJSON.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 
 /* Max bytes for a zone coords CSV string (10 vertices × ~15 chars/pair + separators) */
@@ -215,10 +217,24 @@ esp_err_t config_api_set_zone_coords(uint8_t zone_idx, const char *csv)
 
 /* ---- Apply-all deserialization ---- */
 
-/* Saves all fields directly to NVS without UART commands or ZBoss calls, then
- * restarts. Called from within a ZBoss scheduler alarm — the ZBoss task cannot
- * safely execute blocking UART or nested ZBoss calls, so hardware application
- * (ld2450_cmd_*, coordinator_fallback_*) happens on the next boot from NVS. */
+/* Apply config from a JSON bundle. Each per-key setter is wrapped in its own
+ * esp_zb_lock acquire/release pair (with a one-tick yield between keys) so the
+ * ZBoss main loop can drain its callback queue between bursts. Holding the lock
+ * across the entire bundle starves the ZBoss scheduler and overflows the
+ * 22-slot application callback queue (ZB_SCHEDULER_Q_SIZE - PROTECTED_STACK_POOL).
+ *
+ * Safe to call from any task that can do blocking UART + NVS. Must NOT be called
+ * directly from the ZBoss main loop — portable_config_zigbee.c hops to a worker
+ * task before invoking deserialize for that reason. */
+
+/* Wrap one setter call in a lock/yield so the ZBoss main loop can drain. */
+#define APPLY_KEY(stmt) do { \
+    esp_zb_lock_acquire(portMAX_DELAY); \
+    stmt; \
+    esp_zb_lock_release(); \
+    vTaskDelay(1); \
+} while (0)
+
 esp_err_t config_api_apply_all(const cJSON *root)
 {
     if (root == NULL) {
@@ -226,34 +242,37 @@ esp_err_t config_api_apply_all(const cJSON *root)
     }
 
     cJSON *item;
-#define SAVE_NUM(key, fn, type) \
-    if ((item = cJSON_GetObjectItem(root, key)) && cJSON_IsNumber(item)) \
-        fn((type)item->valueint)
 
-    SAVE_NUM("max_distance_mm",        nvs_config_save_max_distance,       uint16_t);
-    SAVE_NUM("angle_left_deg",         nvs_config_save_angle_left,         uint8_t);
-    SAVE_NUM("angle_right_deg",        nvs_config_save_angle_right,        uint8_t);
-    SAVE_NUM("tracking_mode",          nvs_config_save_tracking_mode,      uint8_t);
-    SAVE_NUM("publish_coords",         nvs_config_save_publish_coords,     uint8_t);
-    SAVE_NUM("bt_disabled",            nvs_config_save_bt_disabled,        uint8_t);
-    SAVE_NUM("fallback_mode",          nvs_config_save_fallback_mode,      uint8_t);
-    SAVE_NUM("fallback_enable",        nvs_config_save_fallback_enable,    uint8_t);
-    SAVE_NUM("hard_timeout_sec",       nvs_config_save_hard_timeout_sec,   uint8_t);
-    SAVE_NUM("ack_timeout_ms",         nvs_config_save_ack_timeout_ms,     uint16_t);
-    SAVE_NUM("heartbeat_enable",       nvs_config_save_heartbeat_enable,   uint8_t);
-    SAVE_NUM("heartbeat_interval_sec", nvs_config_save_heartbeat_interval, uint16_t);
-
+    if ((item = cJSON_GetObjectItem(root, "max_distance_mm")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_max_distance((uint16_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "angle_left_deg")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_angle_left((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "angle_right_deg")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_angle_right((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "tracking_mode")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_tracking_mode((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "publish_coords")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_publish_coords((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "bt_disabled")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_bt_disabled((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "fallback_mode")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_fallback_mode((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "fallback_enable")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_fallback_enable((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "hard_timeout_sec")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_hard_timeout((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "ack_timeout_ms")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_ack_timeout((uint16_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "heartbeat_enable")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_heartbeat_enable((uint8_t)item->valueint));
+    if ((item = cJSON_GetObjectItem(root, "heartbeat_interval_sec")) && cJSON_IsNumber(item))
+        APPLY_KEY(config_api_set_heartbeat_interval((uint16_t)item->valueint));
     if ((item = cJSON_GetObjectItem(root, "occupancy_cooldown_sec")) && cJSON_IsNumber(item))
-        nvs_config_save_occupancy_cooldown(0, (uint16_t)item->valueint);
+        APPLY_KEY(config_api_set_occupancy_cooldown(0, (uint16_t)item->valueint));
     if ((item = cJSON_GetObjectItem(root, "occupancy_delay_ms")) && cJSON_IsNumber(item))
-        nvs_config_save_occupancy_delay(0, (uint16_t)item->valueint);
+        APPLY_KEY(config_api_set_occupancy_delay(0, (uint16_t)item->valueint));
     if ((item = cJSON_GetObjectItem(root, "fallback_cooldown_sec")) && cJSON_IsNumber(item))
-        nvs_config_save_fallback_cooldown(0, (uint16_t)item->valueint);
-
-#undef SAVE_NUM
-
-    nvs_config_t cfg;
-    nvs_config_get(&cfg);
+        APPLY_KEY(config_api_set_fallback_cooldown(0, (uint16_t)item->valueint));
 
     cJSON *zones = cJSON_GetObjectItem(root, "zones");
     if (cJSON_IsArray(zones)) {
@@ -262,31 +281,32 @@ esp_err_t config_api_apply_all(const cJSON *root)
             cJSON *z = cJSON_GetArrayItem(zones, i);
             if (!cJSON_IsObject(z)) continue;
 
+            /* vertex_count must be set before coords so set_zone_coords
+             * can validate the pair count against the stored vertex_count */
             cJSON *vc = cJSON_GetObjectItem(z, "vertex_count");
             if (vc && cJSON_IsNumber(vc))
-                cfg.zones[i].vertex_count = (uint8_t)vc->valueint;
+                APPLY_KEY(config_api_set_zone_vertex_count((uint8_t)i, (uint8_t)vc->valueint));
 
             cJSON *coords = cJSON_GetObjectItem(z, "coords");
             if (coords && cJSON_IsString(coords))
-                csv_to_zone(coords->valuestring, &cfg.zones[i]);
-
-            nvs_config_save_zone(i, &cfg.zones[i]);
+                APPLY_KEY(config_api_set_zone_coords((uint8_t)i, coords->valuestring));
 
             cJSON *cool = cJSON_GetObjectItem(z, "cooldown_sec");
             if (cool && cJSON_IsNumber(cool))
-                nvs_config_save_occupancy_cooldown((uint8_t)(i + 1), (uint16_t)cool->valueint);
+                APPLY_KEY(config_api_set_occupancy_cooldown((uint8_t)(i + 1), (uint16_t)cool->valueint));
             cJSON *delay = cJSON_GetObjectItem(z, "delay_ms");
             if (delay && cJSON_IsNumber(delay))
-                nvs_config_save_occupancy_delay((uint8_t)(i + 1), (uint16_t)delay->valueint);
+                APPLY_KEY(config_api_set_occupancy_delay((uint8_t)(i + 1), (uint16_t)delay->valueint));
             cJSON *fcool = cJSON_GetObjectItem(z, "fallback_cooldown_sec");
             if (fcool && cJSON_IsNumber(fcool))
-                nvs_config_save_fallback_cooldown((uint8_t)(i + 1), (uint16_t)fcool->valueint);
+                APPLY_KEY(config_api_set_fallback_cooldown((uint8_t)(i + 1), (uint16_t)fcool->valueint));
         }
     }
 
-    ESP_LOGI(TAG, "import complete — restarting to apply");
-    esp_restart();
-    return ESP_OK; /* unreachable */
+#undef APPLY_KEY
+
+    ESP_LOGI(TAG, "config applied");
+    return ESP_OK;
 }
 
 /* ---- Read-all serialization ---- */

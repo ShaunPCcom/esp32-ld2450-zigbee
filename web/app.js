@@ -1087,13 +1087,12 @@ document.getElementById('backup-import-file').addEventListener('change', async f
     });
     const d = await r.json();
     if (r.ok) {
-      if (statusEl) statusEl.textContent = 'Restored \u2014 waiting for device\u2026';
+      if (statusEl) statusEl.textContent = 'Restored';
     } else {
       if (statusEl) statusEl.textContent = 'Error: ' + (d.error || r.status);
     }
   } catch (err) {
-    /* Connection drop is expected — esp_restart fires before the 200 goes out */
-    if (statusEl) statusEl.textContent = 'Restored \u2014 waiting for device\u2026';
+    if (statusEl) statusEl.textContent = 'Error: could not restore';
   }
   e.target.value = '';
 });

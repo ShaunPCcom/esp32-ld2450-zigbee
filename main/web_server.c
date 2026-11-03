@@ -109,15 +109,17 @@ static esp_err_t handle_post_config(httpd_req_t *req)
         send_json(req, 400, e); cJSON_Delete(e); return ESP_OK;
     }
 
-    /* Respond before applying — config_api_apply_all saves to NVS then restarts */
+    config_api_apply_all(root);
+    cJSON_Delete(root);
+
+    sensor_bridge_mark_config_dirty();
+
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "status", "ok");
     send_json(req, 200, resp);
     cJSON_Delete(resp);
-
-    config_api_apply_all(root);
-    cJSON_Delete(root);   /* unreachable */
-    return ESP_OK;        /* unreachable */
+    web_server_base_sse_notify("config");
+    return ESP_OK;
 }
 
 /* ================================================================== */
