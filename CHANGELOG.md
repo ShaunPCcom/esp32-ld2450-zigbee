@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.7.1 - 2026-11-07
+
+### Fixes
+- **C6: web UI no longer flickers between "live" and "offline".** The live target
+  stream (WebSocket) and the config/OTA sync stream (SSE) are both held open by the
+  page, but the HTTP server treats a socket that only ever sends as idle and drops
+  it when its socket table fills. The two streams kept evicting each other. They are
+  now protected from that purge, and the server has more socket headroom
+  (10 open sockets, 16 total in lwIP).
+
 ## v2.7.0 - 2026-11-03
 
 ### Fixes
