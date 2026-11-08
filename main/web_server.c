@@ -174,14 +174,15 @@ static esp_err_t handle_post_config(httpd_req_t *req)
 
 static httpd_handle_t s_server_handle = NULL;
 
+/* Defined in web_server_base.c (also used by its SSE module). */
+extern httpd_handle_t web_server_base_get_server(void);
+
+/* IDF completes the WS handshake itself and does NOT call this handler for it
+ * (httpd_uri.c), and the page never sends frames, so nothing may be cached
+ * here — s_server_handle is taken from web_server_base in web_server_start(). */
 static esp_err_t handle_ws_targets(httpd_req_t *req)
 {
-    if (req->method == HTTP_GET) {
-        ESP_LOGI(TAG, "WS /ws/targets: client connected fd=%d",
-                 httpd_req_to_sockfd(req));
-        /* Cache the server handle for ws_push_task */
-        s_server_handle = req->handle;
-    }
+    (void)req;
     return ESP_OK;
 }
 
@@ -309,6 +310,8 @@ esp_err_t web_server_start(void)
     web_server_base_register("/api/config",   HTTP_GET,  handle_get_config,  false);
     web_server_base_register("/api/config",   HTTP_POST, handle_post_config, false);
     web_server_base_register("/ws/targets",   HTTP_GET,  handle_ws_targets,  true);
+
+    s_server_handle = web_server_base_get_server();
 
     xTaskCreate(ws_push_task, "ws_push", 4096, NULL, 4, NULL);
 
