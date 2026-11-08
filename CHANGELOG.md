@@ -1,14 +1,16 @@
 # Changelog
 
-## v2.7.1 - 2026-11-07
+## v2.7.2 - 2026-11-07
 
 ### Fixes
 - **C6: web UI no longer flickers between "live" and "offline".** The live target
-  stream (WebSocket) and the config/OTA sync stream (SSE) are both held open by the
-  page, but the HTTP server treats a socket that only ever sends as idle and drops
-  it when its socket table fills. The two streams kept evicting each other. They are
-  now protected from that purge, and the server has more socket headroom
-  (10 open sockets, 16 total in lwIP).
+  stream never sent any data: the push task waited to learn the HTTP server handle
+  from the WebSocket handshake, but the server finishes that handshake itself and
+  never calls the handler. The page's 3-second no-data watchdog then closed and
+  reopened the socket forever. The push task now gets the handle from `web_server_base`
+  at startup. This regressed in v2.4.0 when the web server moved into esp32-common.
+- v2.7.1-beta tried a different fix (socket eviction protection) that did not address
+  the problem. It has been reverted, so 2.7.1-beta has no net changes over 2.7.0.
 
 ## v2.7.0 - 2026-11-03
 
