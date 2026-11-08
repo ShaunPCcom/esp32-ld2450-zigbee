@@ -24,11 +24,6 @@ CONFIG_ESP_WIFI_ENABLED=y
 CONFIG_HTTPD_WS_SUPPORT=y
 
 #
-# Socket headroom: httpd (10 open) + 3 internal, plus mdns / OTA-check clients
-#
-CONFIG_LWIP_MAX_SOCKETS=16
-
-#
 # WiFi + Zigbee coexistence
 #
 CONFIG_ESP_COEX_ENABLED=y
